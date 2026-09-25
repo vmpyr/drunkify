@@ -1,9 +1,25 @@
 #!/usr/bin/env node
 
-const [command] = process.argv.slice(2);
+import { loadConfig } from './config.js';
+import { createDb } from './db/createDb.js';
+
+const args = process.argv.slice(2);
+if (args[0] === '--') args.shift();
+const [command, subcommand] = args;
 
 if (command === '--help' || command === undefined) {
-  console.log('drunkify CLI — database and admin commands arrive in milestone M1/M2');
+  console.log('Usage: drunkify db migrate');
+  process.exit(0);
+}
+
+if (command === 'db' && subcommand === 'migrate') {
+  const db = createDb(loadConfig());
+  try {
+    await db.migrate();
+    console.log(`Database migrations complete (${db.driver})`);
+  } finally {
+    await db.close();
+  }
   process.exit(0);
 }
 

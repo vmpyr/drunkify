@@ -5,6 +5,9 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS deps
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends g++ make python3 \
+ && rm -rf /var/lib/apt/lists/*
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/server/package.json apps/server/package.json
@@ -22,6 +25,7 @@ RUN pnpm --filter @drunkify/shared build \
 
 FROM base AS runtime
 ENV NODE_ENV=production
+ENV DRUNKIFY_MIGRATIONS_DIR=/app/drizzle
 RUN groupadd --system drunkify \
  && useradd --system --gid drunkify --home-dir /app drunkify \
  && mkdir -p /data/backups \
@@ -29,6 +33,7 @@ RUN groupadd --system drunkify \
 COPY --from=build /out ./
 COPY --from=build /app/apps/server/assets ./assets
 COPY --from=build /app/apps/web/dist ./dist/public
+COPY --from=build /app/drizzle ./drizzle
 RUN printf '#!/bin/sh\nexec node /app/dist/cli.js "$@"\n' > /usr/local/bin/drunkify \
  && chmod +x /usr/local/bin/drunkify
 USER drunkify
