@@ -3,11 +3,13 @@ import type pg from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
 import {
+  buildPersonalWrapped,
   computePredictionWindow,
   evaluateAchievementPredicates,
   pendingTransitions,
   stdDrinks,
 } from '@drunkify/shared';
+import type { PersonalWrappedPayload, SnapshotInput } from '@drunkify/shared';
 
 import type { DatabaseContext } from './createDb.js';
 
@@ -191,6 +193,23 @@ export interface FeedAchievement {
 export interface PhaseTransitionClaim {
   tripId: string;
   phase: 'final_24h' | 'wrapped_unlocked';
+}
+
+export interface WrappedStatus {
+  personalUnlockAt: number;
+  personalUnlocked: boolean;
+  personalWatchedCount: number;
+  totalMembers: number;
+  ceremonyStarted: boolean;
+  ceremonyStartedAt: number | null;
+  serverTime: number;
+}
+
+export interface PersonalWrappedResult {
+  unlocked: boolean;
+  payload: PersonalWrappedPayload | null;
+  revision: number | null;
+  sourceRevision: number | null;
 }
 
 export interface PredictionAnswers {
@@ -426,6 +445,10 @@ function normalizeVenue(row: Record<string, unknown> | undefined): VenueRecord |
     source: row.source === 'osm' ? 'osm' : 'user',
     osmId: nullableText(row.osm_id),
   };
+}
+
+function parseJson<T>(value: unknown): T {
+  return (typeof value === 'string' ? JSON.parse(value) : value) as T;
 }
 
 export class M2Store {
@@ -835,6 +858,10 @@ export class M2Store {
            values (?, ?, ?, ?)`,
           [invite.tripId, input.userId, Number(count?.count ?? 0), input.now],
         );
+        await tx.run(
+          'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+          [input.now, invite.tripId],
+        );
         tripId = invite.tripId;
       }
       const userRow = await tx.get<Record<string, unknown>>('select * from users where id = ?', [
@@ -890,6 +917,10 @@ export class M2Store {
            values (?, ?, ?, ?)`,
           [invite.tripId, input.userId, Number(count?.count ?? 0), input.now],
         );
+        await tx.run(
+          'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+          [input.now, invite.tripId],
+        );
       }
       return { tripId: invite.tripId, consumed: true };
     });
@@ -922,6 +953,11 @@ export class M2Store {
         now,
         userId,
       ]);
+      await tx.run(
+        `update trips set data_revision = data_revision + 1, updated_at = ?
+         where id in (select trip_id from trip_members where user_id = ?)`,
+        [now, userId],
+      );
       return 'ok';
     });
   }
@@ -2013,6 +2049,235 @@ export class M2Store {
     }));
   }
 
+  async #loadSnapshotInput(
+    tx: SqlExecutor,
+    tripId: string,
+  ): Promise<{ input: SnapshotInput; dataRevision: number } | null> {
+    const trip = await tx.get<Record<string, unknown>>(
+      `select * from trips where id = ? ${this.#forUpdate}`,
+      [tripId],
+    );
+    if (!trip) return null;
+
+    const [memberRows, drinkRows, achievementRows, predictionRows, venueRows] = await Promise.all([
+      tx.all<Record<string, unknown>>(
+        `select tm.user_id, u.display_name, tm.color_index, tm.joined_at, u.disabled_at
+         from trip_members tm
+         join users u on u.id = tm.user_id
+         where tm.trip_id = ?
+         order by tm.color_index asc`,
+        [tripId],
+      ),
+      tx.all<Record<string, unknown>>(
+        'select * from drinks where trip_id = ? order by drunk_at asc, id asc',
+        [tripId],
+      ),
+      tx.all<Record<string, unknown>>(
+        'select * from achievement_unlocks where trip_id = ? order by unlocked_at asc, id asc',
+        [tripId],
+      ),
+      tx.all<Record<string, unknown>>(
+        `select * from predictions
+         where trip_id = ? and locked_at is not null
+         order by locked_at asc, id asc`,
+        [tripId],
+      ),
+      tx.all<Record<string, unknown>>(
+        'select * from venues where trip_id = ? order by created_at asc, id asc',
+        [tripId],
+      ),
+    ]);
+
+    const drinks = drinkRows
+      .map(normalizeDrink)
+      .filter((drink): drink is DrinkRecord => drink !== null)
+      .map((drink): SnapshotInput['drinks'][number] => ({
+        id: drink.id,
+        tripId: drink.tripId,
+        userId: drink.userId,
+        category: drink.category,
+        drinkName: drink.drinkName,
+        sizeMl: drink.sizeMl,
+        abv: drink.abv,
+        qty: drink.qty,
+        drunkAt: drink.drunkAt,
+        createdAt: drink.createdAt,
+        venueId: drink.venueId,
+        venueName: drink.venueName,
+        lat: drink.lat,
+        lng: drink.lng,
+        city: drink.city,
+        countryCode: drink.countryCode,
+        rating: drink.rating as SnapshotInput['drinks'][number]['rating'],
+        note: drink.note,
+        editCount: drink.editCount,
+        lastEditedAt: drink.lastEditedAt,
+      }));
+
+    return {
+      dataRevision: Number(trip.data_revision),
+      input: {
+        trip: {
+          id: String(trip.id),
+          name: String(trip.name),
+          startDate: String(trip.start_date),
+          endDate: String(trip.end_date),
+          timezone: String(trip.timezone),
+          themeId: String(trip.theme_id),
+          ownerId: String(trip.owner_id),
+          unlockAt: Number(trip.unlock_at),
+          ceremonyStartedAt: nullableNumber(trip.ceremony_started_at),
+        },
+        members: memberRows.map((row) => ({
+          userId: String(row.user_id),
+          name: String(row.display_name),
+          colorIndex: Number(row.color_index),
+          joinedAt: Number(row.joined_at),
+          disabled: row.disabled_at !== null,
+        })),
+        drinks,
+        achievementUnlocks: achievementRows.map((row) => {
+          const unlock = normalizeAchievementUnlock(row);
+          return {
+            userId: unlock.userId,
+            key: unlock.key,
+            triggeredByUserId: unlock.triggeredByUserId,
+            unlockedAt: unlock.unlockedAt,
+            vars: unlock.vars,
+          };
+        }),
+        predictions: predictionRows.map((row) => ({
+          userId: String(row.user_id),
+          myTotalStd: Number(row.q1_my_total_std),
+          groupTotalStd: Number(row.q2_group_total_std),
+          topMemberId: String(row.q3_top_member_id),
+          leastMemberId: String(row.q4_least_member_id),
+          topDrink: String(row.q5_top_drink),
+          topDrinkCategory:
+            row.q5_top_drink_category as SnapshotInput['predictions'][number]['topDrinkCategory'],
+          lockedAt: Number(row.locked_at),
+        })),
+        venues: venueRows.map((row) => ({
+          id: String(row.id),
+          name: String(row.name),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
+        })),
+      },
+    };
+  }
+
+  async #ensurePersonalSnapshot(
+    tx: SqlExecutor,
+    source: { input: SnapshotInput; dataRevision: number },
+    userId: string,
+    snapshotAt: number,
+  ): Promise<{ payload: PersonalWrappedPayload; revision: number; sourceRevision: number }> {
+    const latest = await tx.get<Record<string, unknown>>(
+      `select payload, revision, source_revision
+       from wrapped_snapshots
+       where trip_id = ? and user_id = ?
+       order by revision desc limit 1`,
+      [source.input.trip.id, userId],
+    );
+    if (latest && Number(latest.source_revision) >= source.dataRevision) {
+      return {
+        payload: parseJson<PersonalWrappedPayload>(latest.payload),
+        revision: Number(latest.revision),
+        sourceRevision: Number(latest.source_revision),
+      };
+    }
+
+    const revision = Number(latest?.revision ?? 0) + 1;
+    const payload = buildPersonalWrapped(source.input, userId, snapshotAt);
+    await tx.run(
+      `insert into wrapped_snapshots
+        (id, trip_id, user_id, payload, revision, source_revision, computed_at)
+       values (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuidv7(),
+        source.input.trip.id,
+        userId,
+        this.#isPostgres ? payload : JSON.stringify(payload),
+        revision,
+        source.dataRevision,
+        snapshotAt,
+      ],
+    );
+    return { payload, revision, sourceRevision: source.dataRevision };
+  }
+
+  async getWrappedStatus(
+    tripId: string,
+    userId: string,
+    now: number,
+  ): Promise<WrappedStatus | null> {
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      `select t.unlock_at, t.ceremony_started_at,
+              (select count(*) from trip_members where trip_id = t.id) total_members,
+              (select count(*) from wrapped_views
+               where trip_id = t.id and watched_at is not null) watched_count
+       from trips t
+       join trip_members tm on tm.trip_id = t.id and tm.user_id = ?
+       where t.id = ?`,
+      [userId, tripId],
+    );
+    if (!row) return null;
+    const unlockAt = Number(row.unlock_at);
+    const ceremonyStartedAt = nullableNumber(row.ceremony_started_at);
+    return {
+      personalUnlockAt: unlockAt,
+      personalUnlocked: now >= unlockAt,
+      personalWatchedCount: Number(row.watched_count),
+      totalMembers: Number(row.total_members),
+      ceremonyStarted: ceremonyStartedAt !== null,
+      ceremonyStartedAt,
+      serverTime: now,
+    };
+  }
+
+  async getPersonalWrapped(
+    tripId: string,
+    userId: string,
+    now: number,
+  ): Promise<PersonalWrappedResult | null> {
+    return this.#adapter.transaction(async (tx) => {
+      const member = await tx.get(
+        'select 1 as value from trip_members where trip_id = ? and user_id = ?',
+        [tripId, userId],
+      );
+      if (!member) return null;
+      const source = await this.#loadSnapshotInput(tx, tripId);
+      if (!source) return null;
+      if (now < source.input.trip.unlockAt) {
+        return { unlocked: false, payload: null, revision: null, sourceRevision: null };
+      }
+      const snapshot = await this.#ensurePersonalSnapshot(tx, source, userId, now);
+      return { unlocked: true, ...snapshot };
+    });
+  }
+
+  async markPersonalWrappedWatched(tripId: string, userId: string, now: number): Promise<boolean> {
+    return this.#adapter.transaction(async (tx) => {
+      const member = await tx.get(
+        'select 1 as value from trip_members where trip_id = ? and user_id = ?',
+        [tripId, userId],
+      );
+      if (!member) return false;
+      await tx.run(
+        `insert into wrapped_views
+          (id, trip_id, user_id, watched_at, last_viewed_at, view_count)
+         values (?, ?, ?, ?, ?, 1)
+         on conflict (trip_id, user_id) do update set
+           watched_at = coalesce(wrapped_views.watched_at, excluded.watched_at),
+           last_viewed_at = excluded.last_viewed_at,
+           view_count = wrapped_views.view_count + 1`,
+        [uuidv7(), tripId, userId, now, now],
+      );
+      return true;
+    });
+  }
+
   async claimPhaseTransitions(now: number): Promise<PhaseTransitionClaim[]> {
     const trips = await this.#adapter.all<Record<string, unknown>>(
       `select id, unlock_at, final24h_marked_at, wrapped_unlocked_marked_at
@@ -2042,13 +2307,23 @@ export class M2Store {
         );
         if (result.changes === 1) claimed.push({ tripId, phase: 'final_24h' });
       }
-      if (transitions.includes('wrapped_unlocked')) {
-        const result = await this.#adapter.run(
-          `update trips set wrapped_unlocked_marked_at = ?
-           where id = ? and wrapped_unlocked_marked_at is null`,
-          [now, tripId],
-        );
-        if (result.changes === 1) claimed.push({ tripId, phase: 'wrapped_unlocked' });
+      if (now >= unlockAt) {
+        const unlocked = await this.#adapter.transaction(async (tx) => {
+          const source = await this.#loadSnapshotInput(tx, tripId);
+          if (!source || source.input.trip.ceremonyStartedAt !== null) return false;
+          for (const member of source.input.members) {
+            await this.#ensurePersonalSnapshot(tx, source, member.userId, now);
+          }
+          const result = await tx.run(
+            `update trips set wrapped_unlocked_marked_at = ?
+             where id = ? and wrapped_unlocked_marked_at is null`,
+            [now, tripId],
+          );
+          return result.changes === 1;
+        });
+        if (unlocked && transitions.includes('wrapped_unlocked')) {
+          claimed.push({ tripId, phase: 'wrapped_unlocked' });
+        }
       }
     }
     return claimed;

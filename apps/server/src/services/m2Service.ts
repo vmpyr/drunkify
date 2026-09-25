@@ -14,9 +14,11 @@ export {
   type MemberRecord,
   type PredictionAnswers,
   type PredictionState,
+  type PersonalWrappedResult,
   type TokenFailure,
   type TripRecord,
   type UserRecord,
   type VenueInput,
   type VenueRecord,
+  type WrappedStatus,
 } from '../db/m2Store.js';

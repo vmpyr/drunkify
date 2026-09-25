@@ -77,4 +77,58 @@ describe('database schema parity', () => {
       expect(varsColumn?.default).toBeDefined();
     }
   });
+
+  it('declares the M8 wrapped view and snapshot constraints in both dialects', () => {
+    const sqliteViews = getSqliteTableConfig(sqliteTables.wrappedViews);
+    const pgViews = getPgTableConfig(pgTables.wrappedViews);
+    const sqliteSnapshots = getSqliteTableConfig(sqliteTables.wrappedSnapshots);
+    const pgSnapshots = getPgTableConfig(pgTables.wrappedSnapshots);
+
+    for (const views of [sqliteViews, pgViews]) {
+      const uniqueIndex = views.indexes.find(
+        (item) => item.config.name === 'ux_wrapped_views_trip_user',
+      );
+      expect(uniqueIndex?.config.unique).toBe(true);
+      expect(
+        views.foreignKeys.map((item) => ({
+          column: item.reference().columns[0]?.name,
+          onDelete: item.onDelete,
+        })),
+      ).toEqual(
+        expect.arrayContaining([
+          { column: 'trip_id', onDelete: 'cascade' },
+          { column: 'user_id', onDelete: 'cascade' },
+        ]),
+      );
+      expect(views.columns.find((column) => column.name === 'view_count')?.default).toBe(0);
+    }
+
+    for (const snapshots of [sqliteSnapshots, pgSnapshots]) {
+      const indexes = snapshots.indexes.map((item) => item.config);
+      const personalIndex = indexes.find((item) => item.name === 'ux_wrapped_snapshots_personal');
+      const squadIndex = indexes.find((item) => item.name === 'ux_wrapped_snapshots_squad');
+      const latestIndex = indexes.find((item) => item.name === 'ix_wrapped_snapshots_latest');
+      expect(personalIndex?.unique).toBe(true);
+      expect(personalIndex?.where).toBeDefined();
+      expect(squadIndex?.unique).toBe(true);
+      expect(squadIndex?.where).toBeDefined();
+      expect(latestIndex?.unique).toBe(false);
+      expect(
+        snapshots.foreignKeys.map((item) => ({
+          column: item.reference().columns[0]?.name,
+          onDelete: item.onDelete,
+        })),
+      ).toEqual(
+        expect.arrayContaining([
+          { column: 'trip_id', onDelete: 'cascade' },
+          { column: 'user_id', onDelete: 'cascade' },
+        ]),
+      );
+      expect(snapshots.columns.find((column) => column.name === 'payload')?.notNull).toBe(true);
+      expect(snapshots.columns.find((column) => column.name === 'revision')?.default).toBe(1);
+      expect(snapshots.columns.find((column) => column.name === 'source_revision')?.notNull).toBe(
+        true,
+      );
+    }
+  });
 });

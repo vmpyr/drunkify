@@ -336,6 +336,51 @@ export const achievementUnlocks = sqliteTable(
   ],
 );
 
+export const wrappedViews = sqliteTable(
+  'wrapped_views',
+  {
+    id: text('id').primaryKey(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    watchedAt: integer('watched_at'),
+    lastViewedAt: integer('last_viewed_at'),
+    viewCount: integer('view_count').notNull().default(0),
+  },
+  (table) => [uniqueIndex('ux_wrapped_views_trip_user').on(table.tripId, table.userId)],
+);
+
+export const wrappedSnapshots = sqliteTable(
+  'wrapped_snapshots',
+  {
+    id: text('id').primaryKey(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    revision: integer('revision').notNull().default(1),
+    sourceRevision: integer('source_revision').notNull(),
+    computedAt: integer('computed_at').notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex('ux_wrapped_snapshots_personal')
+      .on(table.tripId, table.userId, table.revision)
+      .where(sql`${table.userId} is not null`),
+    uniqueIndex('ux_wrapped_snapshots_squad')
+      .on(table.tripId, table.revision)
+      .where(sql`${table.userId} is null`),
+    index('ix_wrapped_snapshots_latest').on(
+      table.tripId,
+      table.userId,
+      sql`${table.revision} desc`,
+    ),
+  ],
+);
+
 export const appliedOps = sqliteTable(
   'applied_ops',
   {
@@ -377,6 +422,8 @@ export const schemaTables = {
   favourites,
   predictions,
   achievementUnlocks,
+  wrappedViews,
+  wrappedSnapshots,
   appliedOps,
   appMeta,
 };

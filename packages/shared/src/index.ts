@@ -26,6 +26,8 @@ export { rankMembers } from './rank.js';
 export type { MemberRankInput, RankedMember } from './rank.js';
 export { dayIndex, dayLabel, tripLengthDays } from './tripDays.js';
 
+export * from './metrics/index.js';
+
 export {
   abvToPos,
   clampAbv,
