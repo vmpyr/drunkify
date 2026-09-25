@@ -277,9 +277,54 @@ describe('M4 venues and operation ledger', () => {
       });
       expect(replay.json()).toEqual(first.json());
     }
+    const otherUserId = uuidv7();
+    const writer = new BetterSqlite3(sqlitePath);
+    writer
+      .prepare(
+        `insert into users
+          (id, email, password_hash, role, display_name, must_change_password,
+           display_theme_pref, created_at, updated_at)
+         values (?, ?, 'unused', 'member', 'Other', 0, 'system', ?, ?)`,
+      )
+      .run(otherUserId, `other-${otherUserId}@example.com`, Date.now(), Date.now());
+    writer
+      .prepare(
+        `insert into applied_ops
+          (client_op_id, user_id, trip_id, drink_id, type, status_code, response, applied_at)
+         values ('foreign-op', ?, ?, ?, 'delete', 200, ?, ?)`,
+      )
+      .run(
+        otherUserId,
+        tripId,
+        uuidv7(),
+        JSON.stringify({ drink: { id: 'must-not-leak' } }),
+        Date.now(),
+      );
+    writer.close();
+    const collision = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/drinks/sync`,
+      headers: headers(cookie),
+      payload: {
+        ops: [
+          {
+            clientOpId: 'foreign-op',
+            tripId,
+            type: 'delete',
+            drinkId: uuidv7(),
+            clientNowMs: Date.now(),
+            userId,
+          },
+        ],
+      },
+    });
+    expect(collision.json()).toMatchObject({
+      results: [{ status: 'error', error: { code: 'id_conflict' } }],
+    });
+    expect(JSON.stringify(collision.json())).not.toContain('must-not-leak');
     const client = new BetterSqlite3(sqlitePath, { readonly: true });
     expect(client.prepare('select count(*) as count from drinks').get()).toEqual({ count: 0 });
-    expect(client.prepare('select count(*) as count from applied_ops').get()).toEqual({ count: 4 });
+    expect(client.prepare('select count(*) as count from applied_ops').get()).toEqual({ count: 5 });
     client.close();
     await app.close();
     await db.close();

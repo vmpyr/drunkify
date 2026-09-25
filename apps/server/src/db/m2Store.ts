@@ -1496,10 +1496,23 @@ export class M2Store {
   }): Promise<DrinkMutationResult> {
     return this.#adapter.transaction(async (tx) => {
       const stored = await tx.get<Record<string, unknown>>(
-        'select status_code, response from applied_ops where client_op_id = ?',
+        `select user_id, trip_id, status_code, response
+         from applied_ops where client_op_id = ?`,
         [input.clientOpId],
       );
       if (stored) {
+        if (stored.user_id !== input.userId || stored.trip_id !== input.tripId) {
+          return {
+            statusCode: 409,
+            body: {
+              error: {
+                code: 'id_conflict',
+                message: 'clientOpId is already in use',
+              },
+            },
+            applied: false,
+          };
+        }
         const response =
           typeof stored.response === 'string'
             ? (JSON.parse(stored.response) as Record<string, unknown>)

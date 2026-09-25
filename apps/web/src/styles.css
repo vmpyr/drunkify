@@ -21,6 +21,15 @@ body {
   padding: 2rem;
   text-align: center;
 }
+.session-banner {
+  width: min(100%, 36rem);
+  margin: 0 auto 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--color-bg, #23160e) 82%, #d45b45);
+  text-align: left;
+}
 h1 {
   margin: 0;
   font-family: 'Alfa Slab One', serif;
@@ -31,9 +40,41 @@ p {
   margin: 0;
   max-width: 32rem;
 }
+.lede {
+  color: color-mix(in srgb, currentColor 74%, transparent);
+}
 .eyebrow {
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+.sync-card {
+  width: min(100%, 24rem);
+  margin: 1rem auto 0;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--color-bg, #23160e) 90%, white);
+  text-align: left;
+}
+.sync-card p {
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+}
+.connection-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #d45b45;
+  box-shadow: 0 0 0 0.25rem rgb(212 91 69 / 18%);
+}
+.connection-dot.online {
+  background: #6fcf97;
+  box-shadow: 0 0 0 0.25rem rgb(111 207 151 / 16%);
 }
