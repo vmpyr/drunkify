@@ -12,6 +12,7 @@ import { setSessionCookie, verifySession } from './auth/session.js';
 import type { Config } from './config.js';
 import { SCHEMA_VERSION, type DatabaseContext } from './db/createDb.js';
 import { registerM2Routes } from './routes/m2.js';
+import { registerM3Routes } from './routes/m3.js';
 
 export interface AppOptions {
   config: Config;
@@ -53,6 +54,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   });
 
   registerM2Routes(app, options);
+  registerM3Routes(app, options);
 
   app.get('/healthz', () => healthResponseSchema.parse({ status: 'ok' }));
   app.get('/readyz', async (_request, reply) => {

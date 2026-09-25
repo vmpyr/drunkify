@@ -45,6 +45,31 @@ export interface ResetRecord {
   usedAt: number | null;
 }
 
+export interface TripRecord {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  timezone: string;
+  themeId: string;
+  unlockAt: number;
+  ownerId: string;
+  ceremonyStartedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MemberRecord {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'member';
+  colorIndex: number;
+  joinedAt: number;
+  disabled: boolean;
+  isOwner: boolean;
+}
+
 export type TokenFailure = 'invalid' | 'expired' | 'used' | 'revoked';
 
 interface RunResult {
@@ -187,20 +212,40 @@ function classifyInvite(invite: InviteRecord | null, now: number): TokenFailure 
   return null;
 }
 
+function normalizeTrip(row: Record<string, unknown> | undefined): TripRecord | null {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    startDate: String(row.start_date),
+    endDate: String(row.end_date),
+    timezone: String(row.timezone),
+    themeId: String(row.theme_id),
+    unlockAt: Number(row.unlock_at),
+    ownerId: String(row.owner_id),
+    ceremonyStartedAt: row.ceremony_started_at === null ? null : Number(row.ceremony_started_at),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
 export class M2Store {
   readonly #adapter: SqlAdapter;
   readonly #booleanTrue: boolean | number;
   readonly #booleanFalse: boolean | number;
+  readonly #forUpdate: string;
 
   constructor(db: DatabaseContext) {
     if (db.raw.sqlite) {
       this.#adapter = sqliteAdapter(db.raw.sqlite);
       this.#booleanTrue = 1;
       this.#booleanFalse = 0;
+      this.#forUpdate = '';
     } else if (db.raw.postgres) {
       this.#adapter = postgresAdapter(db.raw.postgres);
       this.#booleanTrue = true;
       this.#booleanFalse = false;
+      this.#forUpdate = 'for update';
     } else {
       throw new Error('Database raw connection is unavailable');
     }
@@ -578,6 +623,7 @@ export class M2Store {
       const ceremonyStartedAt = row?.ceremony_started_at;
       let tripId: string | null = null;
       if (invite.tripId && ceremonyStartedAt === null) {
+        await tx.get(`select id from trips where id = ? ${this.#forUpdate}`, [invite.tripId]);
         const count = await tx.get<{ count: number | string }>(
           'select count(*) as count from trip_members where trip_id = ?',
           [invite.tripId],
@@ -627,6 +673,7 @@ export class M2Store {
       if (claimed.changes !== 1) return { failure: 'used' };
       if (row?.ceremony_started_at !== null) return { tripId: null, consumed: true };
 
+      await tx.get(`select id from trips where id = ? ${this.#forUpdate}`, [invite.tripId]);
       const existing = await tx.get<{ value: number }>(
         'select 1 as value from trip_members where trip_id = ? and user_id = ?',
         [invite.tripId, input.userId],
@@ -674,6 +721,154 @@ export class M2Store {
         userId,
       ]);
       return 'ok';
+    });
+  }
+
+  async createTrip(input: {
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    timezone: string;
+    themeId: string;
+    unlockAt: number;
+    ownerId: string;
+    now: number;
+  }): Promise<TripRecord> {
+    await this.#adapter.transaction(async (tx) => {
+      await tx.run(
+        `insert into trips
+          (id, name, start_date, end_date, timezone, theme_id, unlock_at, owner_id,
+           created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.id,
+          input.name,
+          input.startDate,
+          input.endDate,
+          input.timezone,
+          input.themeId,
+          input.unlockAt,
+          input.ownerId,
+          input.now,
+          input.now,
+        ],
+      );
+      await tx.run(
+        `insert into trip_members (trip_id, user_id, color_index, joined_at)
+         values (?, ?, 0, ?)`,
+        [input.id, input.ownerId, input.now],
+      );
+    });
+    const trip = await this.getTrip(input.id);
+    if (!trip) throw new Error('Created trip disappeared');
+    return trip;
+  }
+
+  async getTrip(id: string): Promise<TripRecord | null> {
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      'select * from trips where id = ? limit 1',
+      [id],
+    );
+    return normalizeTrip(row);
+  }
+
+  async listTripsForUser(userId: string): Promise<TripRecord[]> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select t.*
+       from trips t
+       join trip_members tm on tm.trip_id = t.id
+       where tm.user_id = ?
+       order by coalesce(tm.last_opened_at, tm.joined_at) desc`,
+      [userId],
+    );
+    return rows.map(normalizeTrip).filter((trip): trip is TripRecord => trip !== null);
+  }
+
+  async isTripMember(tripId: string, userId: string): Promise<boolean> {
+    return Boolean(
+      await this.#adapter.get(
+        'select 1 as value from trip_members where trip_id = ? and user_id = ?',
+        [tripId, userId],
+      ),
+    );
+  }
+
+  async listTripMembers(tripId: string): Promise<MemberRecord[]> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select u.id as user_id, u.display_name, u.email, u.role, u.disabled_at,
+              tm.color_index, tm.joined_at, t.owner_id
+       from trip_members tm
+       join users u on u.id = tm.user_id
+       join trips t on t.id = tm.trip_id
+       where tm.trip_id = ?
+       order by tm.color_index asc`,
+      [tripId],
+    );
+    return rows.map((row) => ({
+      userId: String(row.user_id),
+      name: String(row.display_name),
+      email: String(row.email),
+      role: row.role === 'admin' ? 'admin' : 'member',
+      colorIndex: Number(row.color_index),
+      joinedAt: Number(row.joined_at),
+      disabled: row.disabled_at !== null,
+      isOwner: row.owner_id === row.user_id,
+    }));
+  }
+
+  async addMemberToTrip(
+    tripId: string,
+    userId: string,
+    now: number,
+  ): Promise<
+    | { member: MemberRecord }
+    | { failure: 'trip_not_found' | 'user_not_found' | 'conflict' | 'ceremony_started' }
+  > {
+    return this.#adapter.transaction(async (tx) => {
+      const trip = await tx.get<Record<string, unknown>>(
+        `select id, owner_id, ceremony_started_at
+         from trips where id = ? limit 1 ${this.#forUpdate}`,
+        [tripId],
+      );
+      if (!trip) return { failure: 'trip_not_found' };
+      if (trip.ceremony_started_at !== null) return { failure: 'ceremony_started' };
+      const user = await tx.get<Record<string, unknown>>(
+        'select id, display_name, email, role, disabled_at from users where id = ? limit 1',
+        [userId],
+      );
+      if (!user) return { failure: 'user_not_found' };
+      const existing = await tx.get(
+        'select 1 as value from trip_members where trip_id = ? and user_id = ?',
+        [tripId, userId],
+      );
+      if (existing) return { failure: 'conflict' };
+      const ordinal = await tx.get<{ next_index: number | string }>(
+        'select coalesce(max(color_index), -1) + 1 as next_index from trip_members where trip_id = ?',
+        [tripId],
+      );
+      const colorIndex = Number(ordinal?.next_index ?? 0);
+      await tx.run(
+        `insert into trip_members (trip_id, user_id, color_index, joined_at)
+         values (?, ?, ?, ?)`,
+        [tripId, userId, colorIndex, now],
+      );
+      await tx.run(
+        'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+        [now, tripId],
+      );
+      return {
+        member: {
+          userId,
+          name: String(user.display_name),
+          email: String(user.email),
+          role: user.role === 'admin' ? 'admin' : 'member',
+          colorIndex,
+          joinedAt: now,
+          disabled: user.disabled_at !== null,
+          isOwner: trip.owner_id === userId,
+        },
+      };
     });
   }
 }
