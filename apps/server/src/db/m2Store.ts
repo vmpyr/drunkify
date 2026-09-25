@@ -218,10 +218,13 @@ export interface CeremonyState {
   cardIndex: number;
   subStep: number;
   held: boolean;
+  replayElapsedMs: number;
+  replayStartedAt: number | null;
   updatedAt: number;
 }
 
-export type CeremonyFailure = 'not_found' | 'forbidden' | 'already_started' | 'not_started';
+export type CeremonyFailure =
+  'not_found' | 'forbidden' | 'already_started' | 'not_started' | 'locked';
 
 export interface PredictionAnswers {
   myTotalStd: number;
@@ -464,13 +467,19 @@ function parseJson<T>(value: unknown): T {
 
 function normalizeCeremonyState(row: Record<string, unknown> | undefined): CeremonyState | null {
   if (!row) return null;
+  const cardIndex = Number(row.current_card_index);
+  const held = Boolean(row.held);
+  const updatedAt = Number(row.updated_at);
+  const storedSubStep = Number(row.sub_step);
   return {
     status:
       row.status === 'running' || row.status === 'ended' ? row.status : ('not_started' as const),
-    cardIndex: Number(row.current_card_index),
-    subStep: Number(row.sub_step),
-    held: Boolean(row.held),
-    updatedAt: Number(row.updated_at),
+    cardIndex,
+    subStep: cardIndex === 5 ? 0 : storedSubStep,
+    held,
+    replayElapsedMs: cardIndex === 5 ? storedSubStep : 0,
+    replayStartedAt: cardIndex === 5 && !held ? updatedAt : null,
+    updatedAt,
   };
 }
 
@@ -497,7 +506,10 @@ function ceremonyMaxSubStep(payload: SquadWrappedPayload, cardIndex: number): nu
     case 8:
       return Math.max(payload.cards[8].winners.length - 1, 0);
     case 9:
-      return (payload.cards[9].data?.ranking as unknown[] | undefined)?.length ?? 0;
+      return Math.max(
+        ((payload.cards[9].data?.ranking as unknown[] | undefined)?.length ?? 0) - 1,
+        0,
+      );
     case 10:
     default:
       return 0;
@@ -2423,13 +2435,14 @@ export class M2Store {
   ): Promise<{ state: CeremonyState } | { failure: CeremonyFailure }> {
     return this.#adapter.transaction(async (tx) => {
       const trip = await tx.get<Record<string, unknown>>(
-        `select owner_id, ceremony_started_at
+        `select owner_id, ceremony_started_at, unlock_at
          from trips where id = ? ${this.#forUpdate}`,
         [tripId],
       );
       if (!trip) return { failure: 'not_found' as const };
       if (trip.owner_id !== userId) return { failure: 'forbidden' as const };
       if (trip.ceremony_started_at !== null) return { failure: 'already_started' as const };
+      if (now < Number(trip.unlock_at)) return { failure: 'locked' as const };
       const source = await this.#loadSnapshotInput(tx, tripId);
       if (!source) return { failure: 'not_found' as const };
 
@@ -2478,6 +2491,8 @@ export class M2Store {
           cardIndex: 0,
           subStep: 0,
           held: false,
+          replayElapsedMs: 0,
+          replayStartedAt: null,
           updatedAt: now,
         },
       };
@@ -2501,6 +2516,8 @@ export class M2Store {
         cardIndex: 0,
         subStep: 0,
         held: false,
+        replayElapsedMs: 0,
+        replayStartedAt: null,
         updatedAt: Number(row.trip_updated_at),
       };
     }
@@ -2546,7 +2563,10 @@ export class M2Store {
       if (direction === 'next') {
         if (current.status === 'ended') return { state: current, changed: false };
         const max = ceremonyMaxSubStep(payload, current.cardIndex);
-        if (current.subStep < max) {
+        if (current.cardIndex === 5) {
+          next.cardIndex = 6;
+          next.subStep = 0;
+        } else if (current.subStep < max) {
           next.subStep += 1;
         } else if (current.cardIndex < 10) {
           next.cardIndex += 1;
@@ -2558,6 +2578,9 @@ export class M2Store {
         next.status = 'running';
         next.cardIndex = 10;
         next.subStep = ceremonyMaxSubStep(payload, 10);
+      } else if (current.cardIndex === 5) {
+        next.cardIndex = 4;
+        next.subStep = ceremonyMaxSubStep(payload, 4);
       } else if (current.subStep > 0) {
         next.subStep -= 1;
       } else if (current.cardIndex > 0) {
@@ -2567,11 +2590,28 @@ export class M2Store {
         return { state: current, changed: false };
       }
 
+      if (next.cardIndex === 5 && current.cardIndex !== 5) {
+        next.held = false;
+        next.replayElapsedMs = 0;
+        next.replayStartedAt = now;
+      } else if (next.cardIndex !== 5) {
+        next.held = false;
+        next.replayElapsedMs = 0;
+        next.replayStartedAt = null;
+      }
+      const storedSubStep = next.cardIndex === 5 ? next.replayElapsedMs : next.subStep;
       await tx.run(
         `update ceremony_state
-         set status = ?, current_card_index = ?, sub_step = ?, updated_at = ?
+         set status = ?, current_card_index = ?, sub_step = ?, held = ?, updated_at = ?
          where trip_id = ?`,
-        [next.status, next.cardIndex, next.subStep, now, tripId],
+        [
+          next.status,
+          next.cardIndex,
+          storedSubStep,
+          next.held ? this.#booleanTrue : this.#booleanFalse,
+          now,
+          tripId,
+        ],
       );
       return { state: next, changed: true };
     });
@@ -2600,13 +2640,23 @@ export class M2Store {
       if (!current || current.status === 'not_started') {
         return { failure: 'not_started' as const };
       }
+      if (current.cardIndex !== 5) return { state: current, changed: false };
       if (current.held === held) return { state: current, changed: false };
-      await tx.run('update ceremony_state set held = ?, updated_at = ? where trip_id = ?', [
-        held ? this.#booleanTrue : this.#booleanFalse,
-        now,
-        tripId,
-      ]);
-      return { state: { ...current, held, updatedAt: now }, changed: true };
+      const replayElapsedMs = held
+        ? current.replayElapsedMs + Math.max(0, now - (current.replayStartedAt ?? now))
+        : current.replayElapsedMs;
+      const state: CeremonyState = {
+        ...current,
+        held,
+        replayElapsedMs,
+        replayStartedAt: held ? null : now,
+        updatedAt: now,
+      };
+      await tx.run(
+        'update ceremony_state set sub_step = ?, held = ?, updated_at = ? where trip_id = ?',
+        [replayElapsedMs, held ? this.#booleanTrue : this.#booleanFalse, now, tripId],
+      );
+      return { state, changed: true };
     });
   }
 
@@ -2635,6 +2685,8 @@ export class M2Store {
         cardIndex: 0,
         subStep: 0,
         held: false,
+        replayElapsedMs: 0,
+        replayStartedAt: null,
         updatedAt: now,
       };
       await tx.run(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   actionForKey,
@@ -25,6 +25,21 @@ interface CeremonyResponse {
 interface SquadResponse {
   unlocked: boolean;
   payload: SquadWrappedPayload | null;
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduced(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return reduced;
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -246,8 +261,8 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
-  const [replayElapsed, setReplayElapsed] = useState(0);
-  const replayActiveRef = useRef(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  const reducedMotion = useReducedMotion();
 
   const refresh = useCallback(async () => {
     try {
@@ -269,7 +284,10 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
     void refresh();
     const events = new EventSource(`/api/v1/trips/${tripId}/events`, { withCredentials: true });
     const sync = () => void refresh();
-    events.addEventListener('hello', () => setLive(true));
+    events.addEventListener('hello', () => {
+      setLive(true);
+      void refresh();
+    });
     events.addEventListener('ceremony.started', sync);
     events.addEventListener('ceremony.step', sync);
     events.onerror = () => setLive(false);
@@ -279,7 +297,12 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
   const perform = useCallback(
     async (action: CeremonyAction) => {
       if (!state || busy) return;
-      if (action === 'hold' && state.status !== 'running') return;
+      if (
+        action === 'hold' &&
+        (state.status !== 'running' || payload?.cards[state.cardIndex]?.id !== '06_replay')
+      ) {
+        return;
+      }
       if (action === 'back' && state.status === 'not_started') return;
       setBusy(true);
       try {
@@ -309,7 +332,7 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
         setBusy(false);
       }
     },
-    [busy, refresh, state, tripId],
+    [busy, payload, refresh, state, tripId],
   );
 
   useEffect(() => {
@@ -327,17 +350,15 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
   const replay = replayFromCard(card);
   const replayActive = state?.status === 'running' && card?.id === '06_replay';
   useEffect(() => {
-    if (replayActive && !replayActiveRef.current) setReplayElapsed(0);
-    replayActiveRef.current = replayActive;
-    if (!replayActive || state?.held || !replay) return;
-    let previous = performance.now();
-    const timer = window.setInterval(() => {
-      const now = performance.now();
-      setReplayElapsed((value) => Math.min(value + now - previous, replay.totalPlaybackMs));
-      previous = now;
-    }, 100);
+    if (!replayActive || state?.held || reducedMotion) return;
+    setClockNow(Date.now());
+    const timer = window.setInterval(() => setClockNow(Date.now()), 100);
     return () => window.clearInterval(timer);
-  }, [replay, replayActive, state?.held]);
+  }, [reducedMotion, replayActive, state?.held]);
+  const replayElapsed = reducedMotion
+    ? (replay?.totalPlaybackMs ?? 0)
+    : (state?.replayElapsedMs ?? 0) +
+      (state?.replayStartedAt ? Math.max(0, clockNow - state.replayStartedAt) : 0);
   const replayProgress = replay ? clampReplayProgress(replayElapsed, replay.totalPlaybackMs) : 0;
 
   const progress = useMemo(() => {
@@ -349,7 +370,10 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
   if (loading)
     return (
       <main className="ceremony-screen ceremony-screen--center">
-        <div className="ceremony-loader" />
+        <div className="ceremony-loader" aria-hidden="true" />
+        <span className="sr-only" role="status">
+          Loading ceremony
+        </span>
         <p>Loading the big screen…</p>
       </main>
     );
@@ -365,6 +389,7 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
   return (
     <main
       className={`ceremony-screen ceremony-screen--card-${state.cardIndex + 1}`}
+      aria-busy={busy}
       onClick={() => void perform('next')}
     >
       <div className="ceremony-ambient" aria-hidden="true" />

@@ -29,7 +29,7 @@ function mutationHeaders(cookie?: string) {
   };
 }
 
-async function fixture() {
+async function fixture(unlockAt = Date.now() - 1_000) {
   const directory = await mkdtemp(join(tmpdir(), 'drunkify-m9-'));
   tempDirs.push(directory);
   const sqlitePath = join(directory, 'drunkify.db');
@@ -65,7 +65,7 @@ async function fixture() {
       endDate: '2026-09-25',
       timezone: 'Etc/UTC',
       themeId: 'classic',
-      unlockAt: Date.now() - 1_000,
+      unlockAt,
     },
   });
   const tripId = trip.json<{ trip: { id: string } }>().trip.id;
@@ -181,6 +181,24 @@ describe('M9 ceremony and Squad Wrapped', () => {
     expect(
       (
         await app.inject({
+          method: 'GET',
+          url: `/api/v1/trips/${tripId}/ceremony/state`,
+          headers: { cookie: outsider.cookie },
+        })
+      ).statusCode,
+    ).toBe(404);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/v1/trips/${tripId}/wrapped/squad`,
+          headers: { cookie: outsider.cookie },
+        })
+      ).statusCode,
+    ).toBe(404);
+    expect(
+      (
+        await app.inject({
           method: 'POST',
           url: `/api/v1/trips/${tripId}/ceremony/restart`,
           headers: mutationHeaders(member.cookie),
@@ -236,7 +254,62 @@ describe('M9 ceremony and Squad Wrapped', () => {
     expect(prediction.statusCode).toBe(409);
     expect(prediction.json()).toMatchObject({ error: { code: 'window_closed' } });
 
-    let state = advanced.json<{ state: { status: string } }>().state;
+    let state = advanced.json<{
+      state: { status: string; cardIndex: number; held: boolean };
+    }>().state;
+    for (let index = 0; index < 100 && state.cardIndex !== 5; index += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${tripId}/ceremony/advance`,
+        headers: mutationHeaders(ownerCookie),
+        payload: { direction: 'next' },
+      });
+      state = response.json<{ state: typeof state }>().state;
+    }
+    expect(state.cardIndex).toBe(5);
+    const replayState = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/v1/trips/${tripId}/ceremony/state`,
+        headers: { cookie: member.cookie },
+      })
+    ).json<{
+      state: {
+        replayElapsedMs: number;
+        replayStartedAt: number | null;
+      };
+    }>().state;
+    expect(replayState.replayElapsedMs).toBe(0);
+    expect(typeof replayState.replayStartedAt).toBe('number');
+    const held = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/ceremony/hold`,
+      headers: mutationHeaders(ownerCookie),
+      payload: { held: true },
+    });
+    expect(held.json()).toMatchObject({
+      state: { cardIndex: 5, held: true, replayStartedAt: null },
+    });
+    const resumed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/ceremony/hold`,
+      headers: mutationHeaders(ownerCookie),
+      payload: { held: false },
+    });
+    expect(resumed.json()).toMatchObject({
+      state: { cardIndex: 5, held: false },
+    });
+    expect(resumed.json<{ state: { replayStartedAt: number } }>().state.replayStartedAt).toEqual(
+      expect.any(Number),
+    );
+    const backed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/ceremony/advance`,
+      headers: mutationHeaders(ownerCookie),
+      payload: { direction: 'back' },
+    });
+    expect(backed.json()).toMatchObject({ state: { cardIndex: 4, held: false } });
+
     for (let index = 0; index < 100 && state.status !== 'ended'; index += 1) {
       const response = await app.inject({
         method: 'POST',
@@ -244,7 +317,7 @@ describe('M9 ceremony and Squad Wrapped', () => {
         headers: mutationHeaders(ownerCookie),
         payload: { direction: 'next' },
       });
-      state = response.json<{ state: { status: string } }>().state;
+      state = response.json<{ state: typeof state }>().state;
     }
     expect(state.status).toBe('ended');
     const restarted = await app.inject({
@@ -308,6 +381,19 @@ describe('M9 ceremony and Squad Wrapped', () => {
     });
     expect(frozen.statusCode).toBe(409);
     expect(frozen.json()).toMatchObject({ error: { code: 'ceremony_started' } });
+    await app.close();
+    await db.close();
+  });
+
+  it('rejects ceremony start before the wrapped unlock time', async () => {
+    const { app, db, ownerCookie, tripId } = await fixture(Date.now() + 60_000);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/ceremony/start`,
+      headers: mutationHeaders(ownerCookie),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: 'wrapped_locked' } });
     await app.close();
     await db.close();
   });

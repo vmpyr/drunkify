@@ -30,6 +30,36 @@ export interface AppOptions {
   sseHeartbeatIntervalMs?: number;
 }
 
+function securityHeaders(config: Config): Record<string, string> {
+  const mapOrigins = [
+    new URL(config.MAP_STYLE_URL).origin,
+    ...config.MAP_CSP_ORIGINS.map((value) => new URL(value).origin),
+  ].filter((value, index, values) => values.indexOf(value) === index);
+  const external = mapOrigins.join(' ');
+  const headers: Record<string, string> = {
+    'content-security-policy': [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      `img-src 'self' data: blob:${external ? ` ${external}` : ''}`,
+      `connect-src 'self'${external ? ` ${external}` : ''}`,
+      "worker-src 'self' blob:",
+      "font-src 'self' data:",
+      "frame-ancestors 'none'",
+      "base-uri 'none'",
+      "form-action 'self'",
+    ].join('; '),
+    'permissions-policy': 'geolocation=(self)',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+  };
+  if (config.PUBLIC_URL && new URL(config.PUBLIC_URL).protocol === 'https:') {
+    headers['strict-transport-security'] = 'max-age=31536000; includeSubDomains';
+  }
+  return headers;
+}
+
 export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   const startedAt = options.startedAt ?? Date.now();
   const app = Fastify({
@@ -39,6 +69,10 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   });
 
   await app.register(fastifyCookie);
+  const responseSecurityHeaders = securityHeaders(options.config);
+  app.addHook('onRequest', async (_request, reply) => {
+    reply.headers(responseSecurityHeaders);
+  });
   app.decorateRequest('auth', null);
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/')) return;

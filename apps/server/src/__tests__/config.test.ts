@@ -27,5 +27,11 @@ describe('loadConfig', () => {
   it('fails fast for invalid production and Postgres configuration', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(/PUBLIC_URL.*ADMIN_EMAIL/);
     expect(() => loadConfig({ NODE_ENV: 'test', DB_DRIVER: 'postgres' })).toThrow(/DATABASE_URL/);
+    expect(() =>
+      loadConfig({ NODE_ENV: 'test', MAP_CSP_ORIGINS: 'https://tiles.example,not a url' }),
+    ).toThrow(/MAP_CSP_ORIGINS.*invalid HTTP/);
+    expect(() =>
+      loadConfig({ NODE_ENV: 'test', MAP_STYLE_URL: 'ftp://maps.example/style' }),
+    ).toThrow(/MAP_STYLE_URL.*http or https/);
   });
 });

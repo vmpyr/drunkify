@@ -146,6 +146,53 @@ describe('M1 database bootstrap', () => {
 });
 
 describe('M1 sessions and readiness', () => {
+  it('sets CSP and baseline security headers with configured map origins', async () => {
+    const { config, db } = await fixture('known-password');
+    const securedConfig = loadConfig({
+      ...process.env,
+      NODE_ENV: 'test',
+      SQLITE_PATH: config.SQLITE_PATH,
+      PUBLIC_URL: 'https://drunkify.test',
+      MAP_STYLE_URL: 'https://styles.example.test/maps/liberty.json',
+      MAP_CSP_ORIGINS: 'https://tiles.example.test, https://glyphs.example.test/fonts',
+      LOG_LEVEL: 'silent',
+    });
+    const app = await createApp({ config: securedConfig, db });
+    const response = await app.inject({ method: 'GET', url: '/healthz' });
+    const csp = response.headers['content-security-policy'];
+
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain(
+      "img-src 'self' data: blob: https://styles.example.test https://tiles.example.test https://glyphs.example.test",
+    );
+    expect(csp).toContain(
+      "connect-src 'self' https://styles.example.test https://tiles.example.test https://glyphs.example.test",
+    );
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
+    expect(response.headers['permissions-policy']).toBe('geolocation=(self)');
+    expect(response.headers['strict-transport-security']).toContain('max-age=31536000');
+    await app.close();
+    await db.close();
+  });
+
+  it('omits HSTS for plain HTTP deployments', async () => {
+    const { config, db } = await fixture('known-password');
+    const httpConfig = loadConfig({
+      ...process.env,
+      NODE_ENV: 'test',
+      SQLITE_PATH: config.SQLITE_PATH,
+      PUBLIC_URL: 'http://localhost:3000',
+      LOG_LEVEL: 'silent',
+    });
+    const app = await createApp({ config: httpConfig, db });
+    const response = await app.inject({ method: 'GET', url: '/healthz' });
+    expect(response.headers['strict-transport-security']).toBeUndefined();
+    await app.close();
+    await db.close();
+  });
+
   it('stores only the token hash, verifies sessions, and renews after one hour', async () => {
     const { config, db, sqlitePath } = await fixture('known-password');
     await seedAdminIfNeeded(db, config, { info() {} });

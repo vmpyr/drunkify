@@ -5,6 +5,8 @@ export interface CeremonyState {
   cardIndex: number;
   subStep: number;
   held: boolean;
+  replayElapsedMs: number;
+  replayStartedAt: number | null;
   updatedAt: number;
 }
 

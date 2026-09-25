@@ -19,6 +19,9 @@ function requireSession(request: FastifyRequest, reply: FastifyReply): boolean {
 function sendCeremonyFailure(reply: FastifyReply, failure: CeremonyFailure) {
   if (failure === 'forbidden') return sendError(reply, 403, 'forbidden', 'Trip owner required');
   if (failure === 'not_found') return sendError(reply, 404, 'not_found', 'Trip not found');
+  if (failure === 'locked') {
+    return sendError(reply, 409, 'wrapped_locked', 'Squad Wrapped is still locked');
+  }
   return sendError(
     reply,
     409,

@@ -13,6 +13,13 @@ const optionalString = z.preprocess(
   z.string().optional(),
 );
 
+const httpUrl = z
+  .string()
+  .url()
+  .refine((value) => ['http:', 'https:'].includes(new URL(value).protocol), {
+    message: 'must use http or https',
+  });
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -37,8 +44,8 @@ const envSchema = z
     SMTP_PASS: optionalString,
     MAIL_FROM: z.string().default('Drunkify <no-reply@localhost>'),
     GEO_VENUE_PROVIDER: z.enum(['none', 'overpass']).default('none'),
-    OVERPASS_URL: z.string().url().default('https://overpass-api.de/api/interpreter'),
-    MAP_STYLE_URL: z.string().url().default('https://tiles.openfreemap.org/styles/liberty'),
+    OVERPASS_URL: httpUrl.default('https://overpass-api.de/api/interpreter'),
+    MAP_STYLE_URL: httpUrl.default('https://tiles.openfreemap.org/styles/liberty'),
     MAP_CSP_ORIGINS: z.string().default('https://tiles.openfreemap.org'),
     LOG_LEVEL: z.string().default('info'),
     TZ: optionalString,
@@ -71,6 +78,19 @@ const envSchema = z
         path: ['SMTP_HOST'],
         message: 'SMTP_HOST is required when MAILER=smtp',
       });
+    }
+    for (const origin of env.MAP_CSP_ORIGINS.split(',').map((value) => value.trim())) {
+      if (!origin) continue;
+      try {
+        const url = new URL(origin);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+      } catch {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['MAP_CSP_ORIGINS'],
+          message: `invalid HTTP(S) origin: ${origin}`,
+        });
+      }
     }
   })
   .transform((env) => {
