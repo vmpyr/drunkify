@@ -7,6 +7,8 @@ import './styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { CeremonyScreen } from './ceremony/CeremonyScreen.js';
+import { bigScreenTripId } from './ceremony/model.js';
 import {
   countPendingDrinks,
   installOutboxReplay,
@@ -85,8 +87,7 @@ function App() {
 
 const root = document.querySelector('#root');
 if (!root) throw new Error('Missing #root');
+const ceremonyTripId = bigScreenTripId(window.location);
 createRoot(root).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{ceremonyTripId ? <CeremonyScreen tripId={ceremonyTripId} /> : <App />}</StrictMode>,
 );

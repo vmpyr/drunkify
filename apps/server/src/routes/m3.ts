@@ -8,6 +8,7 @@ import {
   type MemberRecord,
   type TripRecord,
 } from '../services/m2Service.js';
+import { eventBus as defaultEventBus, tripChannel, type EventBus } from '../realtime/eventBus.js';
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -73,8 +74,12 @@ function validTimezone(timezone: string): boolean {
   }
 }
 
-export function registerM3Routes(app: FastifyInstance, options: { db: DatabaseContext }): void {
+export function registerM3Routes(
+  app: FastifyInstance,
+  options: { db: DatabaseContext; eventBus?: EventBus },
+): void {
   const service = new M2Service(options.db);
+  const bus = options.eventBus ?? defaultEventBus;
 
   app.post('/api/v1/trips', async (request, reply) => {
     if (!requireAdmin(request, reply)) return;
@@ -124,6 +129,58 @@ export function registerM3Routes(app: FastifyInstance, options: { db: DatabaseCo
       members: members.map((member) => toMember(member, request)),
       serverTime: Date.now(),
     };
+  });
+
+  app.patch('/api/v1/trips/:tripId', async (request, reply) => {
+    if (!requireSession(request, reply)) return;
+    const parameters = z.object({ tripId: z.string().uuid() }).safeParse(request.params);
+    const body = z
+      .object({
+        name: z.string().trim().min(1).max(80).optional(),
+        startDate: dateSchema.optional(),
+        endDate: dateSchema.optional(),
+        timezone: z.string().min(1).max(100).optional(),
+        themeId: z.string().min(1).max(80).optional(),
+        unlockAt: z.number().int().nonnegative().optional(),
+      })
+      .refine((value) => Object.values(value).some((item) => item !== undefined))
+      .safeParse(request.body);
+    if (!parameters.success || !body.success) {
+      return sendError(reply, 422, 'validation_failed', 'Validation failed');
+    }
+    if (body.data.timezone !== undefined && !validTimezone(body.data.timezone)) {
+      return sendError(reply, 422, 'validation_failed', 'Invalid timezone');
+    }
+    const current = await service.getTrip(parameters.data.tripId);
+    if (!current) return sendError(reply, 404, 'not_found', 'Trip not found');
+    const startDate = body.data.startDate ?? current.startDate;
+    const endDate = body.data.endDate ?? current.endDate;
+    if (startDate > endDate) {
+      return sendError(reply, 422, 'validation_failed', 'Validation failed');
+    }
+    const result = await service.updateTrip(parameters.data.tripId, request.auth!.userId, {
+      ...(body.data.name === undefined ? {} : { name: body.data.name }),
+      ...(body.data.startDate === undefined ? {} : { startDate: body.data.startDate }),
+      ...(body.data.endDate === undefined ? {} : { endDate: body.data.endDate }),
+      ...(body.data.timezone === undefined ? {} : { timezone: body.data.timezone }),
+      ...(body.data.themeId === undefined ? {} : { themeId: body.data.themeId }),
+      ...(body.data.unlockAt === undefined ? {} : { unlockAt: body.data.unlockAt }),
+      now: Date.now(),
+    });
+    if ('failure' in result) {
+      if (result.failure === 'forbidden') {
+        return sendError(reply, 403, 'forbidden', 'Trip owner required');
+      }
+      if (result.failure === 'ceremony_started') {
+        return sendError(reply, 409, 'ceremony_started', 'Ceremony has started');
+      }
+      return sendError(reply, 404, 'not_found', 'Trip not found');
+    }
+    bus.publish(tripChannel(result.trip.id), {
+      type: 'trip.updated',
+      payload: toTrip(result.trip),
+    });
+    return { trip: toTrip(result.trip) };
   });
 
   app.get('/api/v1/trips/:tripId/members', async (request, reply) => {

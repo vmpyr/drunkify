@@ -5,6 +5,8 @@ export {
   SESSION_RETENTION_MS,
   type DrinkCategory,
   type AchievementUnlock,
+  type CeremonyFailure,
+  type CeremonyState,
   type DrinkInput,
   type DrinkMutationResult,
   type DrinkRecord,

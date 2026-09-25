@@ -78,3 +78,547 @@ p {
   background: #6fcf97;
   box-shadow: 0 0 0 0.25rem rgb(111 207 151 / 16%);
 }
+
+button {
+  font: inherit;
+}
+
+.ceremony-screen {
+  --ceremony-accent: #f4a73b;
+  position: relative;
+  width: 100vw;
+  min-height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  isolation: isolate;
+  color: #fff3de;
+  background:
+    radial-gradient(circle at 15% 20%, rgb(244 167 59 / 18%), transparent 30%),
+    radial-gradient(circle at 85% 85%, rgb(219 84 97 / 20%), transparent 32%), #160c08;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ceremony-screen--card-2,
+.ceremony-screen--card-7 {
+  --ceremony-accent: #63d5c5;
+}
+
+.ceremony-screen--card-5,
+.ceremony-screen--card-9 {
+  --ceremony-accent: #ff7187;
+}
+
+.ceremony-screen--card-6,
+.ceremony-screen--card-10 {
+  --ceremony-accent: #b394ff;
+}
+
+.ceremony-screen--center {
+  place-content: center;
+  place-items: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.ceremony-screen--center h1,
+.ceremony-waiting h1,
+.ceremony-stage h1 {
+  margin: 0;
+  font-family: 'Alfa Slab One', serif;
+  font-weight: 400;
+}
+
+.ceremony-screen button {
+  min-width: 3rem;
+  min-height: 3rem;
+  border: 1px solid rgb(255 243 222 / 22%);
+  border-radius: 999px;
+  color: inherit;
+  background: rgb(255 255 255 / 8%);
+  cursor: pointer;
+}
+
+.ceremony-screen button:hover {
+  border-color: var(--ceremony-accent);
+  background: rgb(255 255 255 / 14%);
+}
+
+.ceremony-screen button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.ceremony-ambient {
+  position: absolute;
+  z-index: -1;
+  inset: -20%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 8%, rgb(255 255 255 / 2%) 8.2% 8.5%),
+    conic-gradient(
+      from 20deg at 50% 50%,
+      transparent,
+      color-mix(in srgb, var(--ceremony-accent) 22%, transparent),
+      transparent 35%
+    );
+  animation: ceremony-orbit 24s linear infinite;
+}
+
+.ceremony-header,
+.ceremony-footer {
+  z-index: 2;
+  padding: clamp(1rem, 2.4vw, 2.25rem) clamp(1.25rem, 3.5vw, 4rem);
+}
+
+.ceremony-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  font-size: clamp(0.65rem, 1vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+
+.ceremony-count {
+  justify-self: end;
+}
+
+.ceremony-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #c5ad9e;
+}
+
+.ceremony-live::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.ceremony-live.is-live {
+  color: #7ce7ac;
+}
+
+.ceremony-stage,
+.ceremony-waiting {
+  width: min(90vw, 100rem);
+  margin: auto;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: clamp(0.8rem, 2vh, 1.8rem);
+  text-align: center;
+  animation: ceremony-enter 360ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.ceremony-stage h1,
+.ceremony-waiting h1 {
+  max-width: 16ch;
+  font-size: clamp(2.8rem, 6.5vw, 7.5rem);
+  line-height: 0.94;
+  text-wrap: balance;
+  text-shadow: 0 0 3rem color-mix(in srgb, var(--ceremony-accent) 28%, transparent);
+}
+
+.ceremony-kicker,
+.ceremony-waiting > p {
+  color: var(--ceremony-accent);
+  font-size: clamp(0.75rem, 1.2vw, 1.1rem);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.ceremony-waiting button {
+  min-width: 12rem;
+  padding: 0.85rem 1.5rem;
+  border-color: var(--ceremony-accent);
+  background: var(--ceremony-accent);
+  color: #23160e;
+  font-weight: 600;
+}
+
+.ceremony-stat {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+}
+
+.ceremony-stat__value {
+  color: var(--ceremony-accent);
+  font-family: 'Alfa Slab One', serif;
+  font-size: clamp(4rem, 11vw, 12rem);
+  line-height: 0.85;
+  text-shadow: 0 0 4rem color-mix(in srgb, var(--ceremony-accent) 30%, transparent);
+}
+
+.ceremony-stat__label {
+  font-size: clamp(0.9rem, 1.4vw, 1.5rem);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ceremony-pills {
+  max-width: 80vw;
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+}
+
+.ceremony-pills span {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgb(255 243 222 / 14%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 5%);
+  color: #cdb8a8;
+  font-size: clamp(0.75rem, 1vw, 1rem);
+}
+
+.ceremony-pills b {
+  color: #fff3de;
+}
+
+.ceremony-footer {
+  display: grid;
+  gap: 0.75rem;
+  cursor: default;
+}
+
+.ceremony-progress {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+}
+
+.ceremony-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ceremony-accent);
+  transition: width 300ms ease;
+}
+
+.ceremony-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  color: #ae9a8d;
+  font-size: clamp(0.7rem, 1vw, 0.9rem);
+  text-align: center;
+}
+
+.ceremony-controls button {
+  font-size: 1.25rem;
+}
+
+.ceremony-held,
+.ceremony-error {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.ceremony-held {
+  top: 1.35rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--ceremony-accent);
+  color: #23160e;
+}
+
+.ceremony-error {
+  bottom: 5.5rem;
+  max-width: 80vw;
+  padding: 0.65rem 1rem;
+  background: #f08a6b;
+  color: #23160e;
+  letter-spacing: normal;
+}
+
+.ceremony-list {
+  width: min(60rem, 75vw);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ceremony-list h3 {
+  margin: 0 0 0.35rem;
+  color: var(--ceremony-accent);
+  font-family: 'Alfa Slab One', serif;
+  font-size: clamp(1.8rem, 3vw, 3.5rem);
+  font-weight: 400;
+  text-transform: capitalize;
+}
+
+.ceremony-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: clamp(0.55rem, 1.1vh, 1rem) clamp(0.8rem, 1.5vw, 1.5rem);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 5%);
+  font-size: clamp(0.9rem, 1.4vw, 1.35rem);
+}
+
+.ceremony-list em {
+  color: var(--ceremony-accent);
+  font-style: normal;
+}
+
+.ceremony-versus {
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 3vw, 3rem);
+  font-size: clamp(1rem, 2vw, 2rem);
+}
+
+.ceremony-versus > span {
+  color: var(--ceremony-accent);
+  font-weight: 600;
+}
+
+.ceremony-versus div {
+  display: grid;
+}
+
+.ceremony-versus small {
+  color: #ae9a8d;
+  font-size: 0.65em;
+  text-transform: uppercase;
+}
+
+.ceremony-versus strong {
+  font-family: 'Alfa Slab One', serif;
+  font-size: clamp(3rem, 7vw, 7rem);
+  font-weight: 400;
+}
+
+.ceremony-versus i {
+  color: #ae9a8d;
+  font-style: normal;
+}
+
+.ceremony-award {
+  display: grid;
+  justify-items: center;
+}
+
+.ceremony-award > span {
+  font-size: clamp(4rem, 8vw, 8rem);
+  filter: drop-shadow(0 0 2rem color-mix(in srgb, var(--ceremony-accent) 45%, transparent));
+}
+
+.ceremony-award h3 {
+  margin: 0;
+  color: var(--ceremony-accent);
+  font-family: 'Alfa Slab One', serif;
+  font-size: clamp(2rem, 4vw, 4.5rem);
+  font-weight: 400;
+  text-transform: capitalize;
+}
+
+.ceremony-award p {
+  margin-top: 0.5rem;
+  font-size: clamp(1.25rem, 2.3vw, 2.5rem);
+}
+
+.ceremony-award small {
+  margin-top: 0.3rem;
+  color: #ae9a8d;
+}
+
+.replay {
+  width: min(76rem, 82vw);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.replay__sky {
+  position: relative;
+  height: clamp(10rem, 28vh, 22rem);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px),
+    radial-gradient(
+      circle at center,
+      color-mix(in srgb, var(--ceremony-accent) 15%, transparent),
+      transparent 65%
+    ),
+    rgb(255 255 255 / 3%);
+  background-size:
+    4rem 4rem,
+    4rem 4rem,
+    auto,
+    auto;
+}
+
+.replay__sky > i {
+  position: absolute;
+  left: var(--event-x);
+  top: var(--event-y);
+  width: var(--event-size);
+  height: var(--event-size);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--ceremony-accent);
+  box-shadow: 0 0 1.5rem var(--ceremony-accent);
+  animation: replay-pop 300ms ease-out;
+}
+
+.replay__pulse {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+}
+
+.replay__pulse strong {
+  color: #fff;
+  font-family: 'Alfa Slab One', serif;
+  font-size: clamp(3rem, 7vw, 7rem);
+  font-weight: 400;
+  line-height: 0.9;
+}
+
+.replay__pulse span {
+  color: #cdb8a8;
+  font-size: clamp(0.7rem, 1vw, 1rem);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.replay__members {
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.replay__members span {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #bba698;
+  font-size: clamp(0.65rem, 0.9vw, 0.85rem);
+  white-space: nowrap;
+}
+
+.replay__members i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: hsl(calc(35 + var(--member) * 48) 82% 67%);
+}
+
+.replay__members b {
+  color: #fff3de;
+}
+
+.replay__track {
+  position: relative;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.replay__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f4a73b, var(--ceremony-accent));
+}
+
+.replay__track i {
+  position: absolute;
+  top: 50%;
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: translate(-50%, -50%);
+  border: 2px solid #160c08;
+  border-radius: 50%;
+  background: #fff3de;
+}
+
+.replay__caption {
+  display: flex;
+  justify-content: space-between;
+  color: #bba698;
+  font-size: clamp(0.7rem, 1vw, 0.9rem);
+}
+
+.ceremony-loader {
+  width: 3rem;
+  height: 3rem;
+  border: 3px solid rgb(255 255 255 / 15%);
+  border-top-color: var(--ceremony-accent);
+  border-radius: 50%;
+  animation: ceremony-spin 750ms linear infinite;
+}
+
+@keyframes ceremony-enter {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ceremony-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ceremony-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes replay-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+}
+
+@media (aspect-ratio < 4 / 3) {
+  .ceremony-stage h1,
+  .ceremony-waiting h1 {
+    font-size: clamp(2.5rem, 9vw, 5rem);
+  }
+
+  .ceremony-controls span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ceremony-ambient,
+  .ceremony-loader,
+  .ceremony-stage,
+  .ceremony-waiting,
+  .replay__sky > i {
+    animation: none;
+  }
+}

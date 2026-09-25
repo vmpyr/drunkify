@@ -131,4 +131,33 @@ describe('database schema parity', () => {
       );
     }
   });
+
+  it('declares the M9 ceremony singleton and bounds in both dialects', () => {
+    const sqliteCeremony = getSqliteTableConfig(sqliteTables.ceremonyState);
+    const pgCeremony = getPgTableConfig(pgTables.ceremonyState);
+    for (const ceremony of [sqliteCeremony, pgCeremony]) {
+      expect(
+        ceremony.indexes.find((item) => item.config.name === 'ux_ceremony_state_trip')?.config
+          .unique,
+      ).toBe(true);
+      expect(ceremony.checks.map((item) => item.name)).toEqual(
+        expect.arrayContaining([
+          'ck_ceremony_state_status',
+          'ck_ceremony_state_card_index',
+          'ck_ceremony_state_sub_step',
+        ]),
+      );
+      expect(
+        ceremony.foreignKeys.map((item) => ({
+          column: item.reference().columns[0]?.name,
+          onDelete: item.onDelete,
+        })),
+      ).toEqual(
+        expect.arrayContaining([
+          { column: 'trip_id', onDelete: 'cascade' },
+          { column: 'started_by', onDelete: 'set null' },
+        ]),
+      );
+    }
+  });
 });

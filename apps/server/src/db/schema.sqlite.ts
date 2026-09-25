@@ -353,6 +353,32 @@ export const wrappedViews = sqliteTable(
   (table) => [uniqueIndex('ux_wrapped_views_trip_user').on(table.tripId, table.userId)],
 );
 
+export const ceremonyState = sqliteTable(
+  'ceremony_state',
+  {
+    id: text('id').primaryKey(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('not_started'),
+    currentCardIndex: integer('current_card_index').notNull().default(0),
+    subStep: integer('sub_step').notNull().default(0),
+    held: integer('held', { mode: 'boolean' }).notNull().default(false),
+    startedBy: text('started_by').references(() => users.id, { onDelete: 'set null' }),
+    startedAt: integer('started_at'),
+    updatedAt: integer('updated_at').notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex('ux_ceremony_state_trip').on(table.tripId),
+    check('ck_ceremony_state_status', sql`${table.status} in ('not_started','running','ended')`),
+    check(
+      'ck_ceremony_state_card_index',
+      sql`${table.currentCardIndex} >= 0 and ${table.currentCardIndex} <= 10`,
+    ),
+    check('ck_ceremony_state_sub_step', sql`${table.subStep} >= 0`),
+  ],
+);
+
 export const wrappedSnapshots = sqliteTable(
   'wrapped_snapshots',
   {
@@ -423,6 +449,7 @@ export const schemaTables = {
   predictions,
   achievementUnlocks,
   wrappedViews,
+  ceremonyState,
   wrappedSnapshots,
   appliedOps,
   appMeta,

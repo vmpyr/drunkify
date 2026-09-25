@@ -57,6 +57,43 @@ export {
 export type { RatingAgg } from './ratings.js';
 export { elapsedTripDays, rankDays, rankFor, stdPerDay } from './ranks.js';
 export type { RankBand } from './ranks.js';
+export {
+  allocateAwards,
+  AWARD_PRIORITY,
+  buildSideLeaderboard,
+  buildSquadWrapped,
+  coefficientOfVariation,
+  comebackDelta,
+  computeBloopers,
+  computeReplayTimeline,
+  detectIncidents,
+  fanciestScore,
+  FANCY_WEIGHT,
+  groupHourlySeries,
+  longestAlcoholStreak,
+  oracle,
+  orderAwardsForCeremony,
+  scorePredictions,
+  SIDE_LEADERBOARD_KEYS,
+} from './squad.js';
+export type {
+  AwardCard,
+  AwardKey,
+  AwardWinner,
+  Bloopers,
+  HourPoint,
+  Incident,
+  MainBoardRow,
+  MemberMetrics,
+  OracleScore,
+  PredictionRevealRow,
+  RankedRow,
+  ReplayEvent,
+  ReplayPayload,
+  SideLeaderboardKey,
+  SquadMetricsConfig,
+  SquadWrappedPayload,
+} from './squad.js';
 export { UNITS, shareOfGroupAlcohol, sumVolume, weightedAvgAbv } from './totals.js';
 export type { VolumeTotals } from './totals.js';
 export { DRINK_CATEGORIES, toTripMeta } from './types.js';

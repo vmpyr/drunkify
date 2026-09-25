@@ -4,12 +4,13 @@ import { v7 as uuidv7 } from 'uuid';
 
 import {
   buildPersonalWrapped,
+  buildSquadWrapped,
   computePredictionWindow,
   evaluateAchievementPredicates,
   pendingTransitions,
   stdDrinks,
 } from '@drunkify/shared';
-import type { PersonalWrappedPayload, SnapshotInput } from '@drunkify/shared';
+import type { PersonalWrappedPayload, SnapshotInput, SquadWrappedPayload } from '@drunkify/shared';
 
 import type { DatabaseContext } from './createDb.js';
 
@@ -211,6 +212,16 @@ export interface PersonalWrappedResult {
   revision: number | null;
   sourceRevision: number | null;
 }
+
+export interface CeremonyState {
+  status: 'not_started' | 'running' | 'ended';
+  cardIndex: number;
+  subStep: number;
+  held: boolean;
+  updatedAt: number;
+}
+
+export type CeremonyFailure = 'not_found' | 'forbidden' | 'already_started' | 'not_started';
 
 export interface PredictionAnswers {
   myTotalStd: number;
@@ -449,6 +460,48 @@ function normalizeVenue(row: Record<string, unknown> | undefined): VenueRecord |
 
 function parseJson<T>(value: unknown): T {
   return (typeof value === 'string' ? JSON.parse(value) : value) as T;
+}
+
+function normalizeCeremonyState(row: Record<string, unknown> | undefined): CeremonyState | null {
+  if (!row) return null;
+  return {
+    status:
+      row.status === 'running' || row.status === 'ended' ? row.status : ('not_started' as const),
+    cardIndex: Number(row.current_card_index),
+    subStep: Number(row.sub_step),
+    held: Boolean(row.held),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+function ceremonyMaxSubStep(payload: SquadWrappedPayload, cardIndex: number): number {
+  switch (cardIndex) {
+    case 0:
+      return 1;
+    case 1:
+      return Math.max(
+        ((payload.cards[1].data?.incidents as unknown[] | undefined)?.length ?? 0) - 1,
+        0,
+      );
+    case 2:
+      return 0;
+    case 3:
+    case 4:
+      return 1;
+    case 5:
+      return 0;
+    case 6:
+      return 6;
+    case 7:
+      return Math.max(((payload.cards[7].data?.rows as unknown[] | undefined)?.length ?? 0) - 1, 0);
+    case 8:
+      return Math.max(payload.cards[8].winners.length - 1, 0);
+    case 9:
+      return (payload.cards[9].data?.ranking as unknown[] | undefined)?.length ?? 0;
+    case 10:
+    default:
+      return 0;
+  }
 }
 
 export class M2Store {
@@ -1009,6 +1062,66 @@ export class M2Store {
       [id],
     );
     return normalizeTrip(row);
+  }
+
+  async updateTrip(
+    tripId: string,
+    userId: string,
+    input: {
+      name?: string;
+      startDate?: string;
+      endDate?: string;
+      timezone?: string;
+      themeId?: string;
+      unlockAt?: number;
+      now: number;
+    },
+  ): Promise<{ trip: TripRecord } | { failure: 'not_found' | 'forbidden' | 'ceremony_started' }> {
+    return this.#adapter.transaction(async (tx) => {
+      const current = await tx.get<Record<string, unknown>>(
+        `select * from trips where id = ? ${this.#forUpdate}`,
+        [tripId],
+      );
+      if (!current) return { failure: 'not_found' as const };
+      if (current.owner_id !== userId) return { failure: 'forbidden' as const };
+      if (current.ceremony_started_at !== null) return { failure: 'ceremony_started' as const };
+
+      const assignments: string[] = [];
+      const parameters: unknown[] = [];
+      const add = (column: string, value: unknown) => {
+        assignments.push(`${column} = ?`);
+        parameters.push(value);
+      };
+      if (input.name !== undefined) add('name', input.name);
+      if (input.startDate !== undefined) add('start_date', input.startDate);
+      if (input.endDate !== undefined) add('end_date', input.endDate);
+      if (input.timezone !== undefined) add('timezone', input.timezone);
+      if (input.themeId !== undefined) add('theme_id', input.themeId);
+      const unlockChanged =
+        input.unlockAt !== undefined && input.unlockAt !== Number(current.unlock_at);
+      if (input.unlockAt !== undefined) {
+        add('unlock_at', input.unlockAt);
+      }
+      if (unlockChanged) {
+        assignments.push('final24h_marked_at = null', 'wrapped_unlocked_marked_at = null');
+      }
+
+      const revisionChanged =
+        (input.name !== undefined && input.name !== current.name) ||
+        (input.startDate !== undefined && input.startDate !== current.start_date) ||
+        (input.endDate !== undefined && input.endDate !== current.end_date) ||
+        (input.timezone !== undefined && input.timezone !== current.timezone) ||
+        unlockChanged;
+      if (revisionChanged) assignments.push('data_revision = data_revision + 1');
+      add('updated_at', input.now);
+      parameters.push(tripId);
+      await tx.run(`update trips set ${assignments.join(', ')} where id = ?`, parameters);
+      const trip = normalizeTrip(
+        await tx.get<Record<string, unknown>>('select * from trips where id = ?', [tripId]),
+      );
+      if (!trip) throw new Error('Updated trip disappeared');
+      return { trip };
+    });
   }
 
   async listTripsForUser(userId: string): Promise<TripRecord[]> {
@@ -2275,6 +2388,270 @@ export class M2Store {
         [uuidv7(), tripId, userId, now, now],
       );
       return true;
+    });
+  }
+
+  async getSquadWrapped(
+    tripId: string,
+    userId: string,
+  ): Promise<{ unlocked: boolean; payload: SquadWrappedPayload | null } | null> {
+    const trip = await this.#adapter.get<Record<string, unknown>>(
+      `select t.ceremony_started_at
+       from trips t
+       join trip_members tm on tm.trip_id = t.id and tm.user_id = ?
+       where t.id = ?`,
+      [userId, tripId],
+    );
+    if (!trip) return null;
+    if (trip.ceremony_started_at === null) return { unlocked: false, payload: null };
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      `select payload from wrapped_snapshots
+       where trip_id = ? and user_id is null
+       order by revision desc limit 1`,
+      [tripId],
+    );
+    return {
+      unlocked: row !== undefined,
+      payload: row ? parseJson<SquadWrappedPayload>(row.payload) : null,
+    };
+  }
+
+  async startCeremony(
+    tripId: string,
+    userId: string,
+    now: number,
+  ): Promise<{ state: CeremonyState } | { failure: CeremonyFailure }> {
+    return this.#adapter.transaction(async (tx) => {
+      const trip = await tx.get<Record<string, unknown>>(
+        `select owner_id, ceremony_started_at
+         from trips where id = ? ${this.#forUpdate}`,
+        [tripId],
+      );
+      if (!trip) return { failure: 'not_found' as const };
+      if (trip.owner_id !== userId) return { failure: 'forbidden' as const };
+      if (trip.ceremony_started_at !== null) return { failure: 'already_started' as const };
+      const source = await this.#loadSnapshotInput(tx, tripId);
+      if (!source) return { failure: 'not_found' as const };
+
+      for (const member of source.input.members) {
+        await this.#ensurePersonalSnapshot(tx, source, member.userId, now);
+      }
+      const existing = await tx.get<{ revision: number | string }>(
+        `select revision from wrapped_snapshots
+         where trip_id = ? and user_id is null order by revision desc limit 1`,
+        [tripId],
+      );
+      const revision = Number(existing?.revision ?? 0) + 1;
+      const payload = buildSquadWrapped(source.input, now);
+      await tx.run(
+        `insert into wrapped_snapshots
+          (id, trip_id, user_id, payload, revision, source_revision, computed_at)
+         values (?, ?, null, ?, ?, ?, ?)`,
+        [
+          uuidv7(),
+          tripId,
+          this.#isPostgres ? payload : JSON.stringify(payload),
+          revision,
+          source.dataRevision,
+          now,
+        ],
+      );
+      await tx.run('update trips set ceremony_started_at = ?, updated_at = ? where id = ?', [
+        now,
+        now,
+        tripId,
+      ]);
+      await tx.run(
+        `insert into ceremony_state
+          (id, trip_id, status, current_card_index, sub_step, held,
+           started_by, started_at, updated_at)
+         values (?, ?, 'running', 0, 0, ?, ?, ?, ?)
+         on conflict (trip_id) do update set
+           status = 'running', current_card_index = 0, sub_step = 0,
+           held = excluded.held, started_by = excluded.started_by,
+           started_at = excluded.started_at, updated_at = excluded.updated_at`,
+        [uuidv7(), tripId, this.#booleanFalse, userId, now, now],
+      );
+      return {
+        state: {
+          status: 'running',
+          cardIndex: 0,
+          subStep: 0,
+          held: false,
+          updatedAt: now,
+        },
+      };
+    });
+  }
+
+  async getCeremonyState(tripId: string, userId: string): Promise<CeremonyState | null> {
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      `select t.ceremony_started_at, t.updated_at as trip_updated_at,
+              cs.status, cs.current_card_index, cs.sub_step, cs.held, cs.updated_at
+       from trips t
+       join trip_members tm on tm.trip_id = t.id and tm.user_id = ?
+       left join ceremony_state cs on cs.trip_id = t.id
+       where t.id = ?`,
+      [userId, tripId],
+    );
+    if (!row) return null;
+    if (row.status === null || row.status === undefined) {
+      return {
+        status: 'not_started',
+        cardIndex: 0,
+        subStep: 0,
+        held: false,
+        updatedAt: Number(row.trip_updated_at),
+      };
+    }
+    return normalizeCeremonyState(row);
+  }
+
+  async #loadSquadPayload(tx: SqlExecutor, tripId: string): Promise<SquadWrappedPayload | null> {
+    const row = await tx.get<Record<string, unknown>>(
+      `select payload from wrapped_snapshots
+       where trip_id = ? and user_id is null
+       order by revision desc limit 1`,
+      [tripId],
+    );
+    return row ? parseJson<SquadWrappedPayload>(row.payload) : null;
+  }
+
+  async advanceCeremony(
+    tripId: string,
+    userId: string,
+    direction: 'next' | 'back',
+    now: number,
+  ): Promise<{ state: CeremonyState; changed: boolean } | { failure: CeremonyFailure }> {
+    return this.#adapter.transaction(async (tx) => {
+      const trip = await tx.get<Record<string, unknown>>(
+        `select owner_id, ceremony_started_at from trips where id = ? ${this.#forUpdate}`,
+        [tripId],
+      );
+      if (!trip) return { failure: 'not_found' as const };
+      if (trip.owner_id !== userId) return { failure: 'forbidden' as const };
+      if (trip.ceremony_started_at === null) return { failure: 'not_started' as const };
+      const row = await tx.get<Record<string, unknown>>(
+        `select * from ceremony_state where trip_id = ? ${this.#forUpdate}`,
+        [tripId],
+      );
+      const current = normalizeCeremonyState(row);
+      if (!current || current.status === 'not_started') {
+        return { failure: 'not_started' as const };
+      }
+      const payload = await this.#loadSquadPayload(tx, tripId);
+      if (!payload) return { failure: 'not_started' as const };
+      const next = { ...current, updatedAt: now };
+
+      if (direction === 'next') {
+        if (current.status === 'ended') return { state: current, changed: false };
+        const max = ceremonyMaxSubStep(payload, current.cardIndex);
+        if (current.subStep < max) {
+          next.subStep += 1;
+        } else if (current.cardIndex < 10) {
+          next.cardIndex += 1;
+          next.subStep = 0;
+        } else {
+          next.status = 'ended';
+        }
+      } else if (current.status === 'ended') {
+        next.status = 'running';
+        next.cardIndex = 10;
+        next.subStep = ceremonyMaxSubStep(payload, 10);
+      } else if (current.subStep > 0) {
+        next.subStep -= 1;
+      } else if (current.cardIndex > 0) {
+        next.cardIndex -= 1;
+        next.subStep = ceremonyMaxSubStep(payload, next.cardIndex);
+      } else {
+        return { state: current, changed: false };
+      }
+
+      await tx.run(
+        `update ceremony_state
+         set status = ?, current_card_index = ?, sub_step = ?, updated_at = ?
+         where trip_id = ?`,
+        [next.status, next.cardIndex, next.subStep, now, tripId],
+      );
+      return { state: next, changed: true };
+    });
+  }
+
+  async holdCeremony(
+    tripId: string,
+    userId: string,
+    held: boolean,
+    now: number,
+  ): Promise<{ state: CeremonyState; changed: boolean } | { failure: CeremonyFailure }> {
+    return this.#adapter.transaction(async (tx) => {
+      const trip = await tx.get<Record<string, unknown>>(
+        `select owner_id, ceremony_started_at from trips where id = ? ${this.#forUpdate}`,
+        [tripId],
+      );
+      if (!trip) return { failure: 'not_found' as const };
+      if (trip.owner_id !== userId) return { failure: 'forbidden' as const };
+      if (trip.ceremony_started_at === null) return { failure: 'not_started' as const };
+      const current = normalizeCeremonyState(
+        await tx.get<Record<string, unknown>>(
+          `select * from ceremony_state where trip_id = ? ${this.#forUpdate}`,
+          [tripId],
+        ),
+      );
+      if (!current || current.status === 'not_started') {
+        return { failure: 'not_started' as const };
+      }
+      if (current.held === held) return { state: current, changed: false };
+      await tx.run('update ceremony_state set held = ?, updated_at = ? where trip_id = ?', [
+        held ? this.#booleanTrue : this.#booleanFalse,
+        now,
+        tripId,
+      ]);
+      return { state: { ...current, held, updatedAt: now }, changed: true };
+    });
+  }
+
+  async restartCeremony(
+    tripId: string,
+    userId: string,
+    now: number,
+  ): Promise<{ state: CeremonyState; changed: boolean } | { failure: CeremonyFailure }> {
+    return this.#adapter.transaction(async (tx) => {
+      const trip = await tx.get<Record<string, unknown>>(
+        `select owner_id, ceremony_started_at from trips where id = ? ${this.#forUpdate}`,
+        [tripId],
+      );
+      if (!trip) return { failure: 'not_found' as const };
+      if (trip.owner_id !== userId) return { failure: 'forbidden' as const };
+      if (trip.ceremony_started_at === null) return { failure: 'not_started' as const };
+      const current = normalizeCeremonyState(
+        await tx.get<Record<string, unknown>>(
+          `select * from ceremony_state where trip_id = ? ${this.#forUpdate}`,
+          [tripId],
+        ),
+      );
+      if (!current) return { failure: 'not_started' as const };
+      const state: CeremonyState = {
+        status: 'running',
+        cardIndex: 0,
+        subStep: 0,
+        held: false,
+        updatedAt: now,
+      };
+      await tx.run(
+        `update ceremony_state
+         set status = 'running', current_card_index = 0, sub_step = 0,
+             held = ?, updated_at = ?
+         where trip_id = ?`,
+        [this.#booleanFalse, now, tripId],
+      );
+      return {
+        state,
+        changed:
+          current.status !== state.status ||
+          current.cardIndex !== 0 ||
+          current.subStep !== 0 ||
+          current.held,
+      };
     });
   }
 
