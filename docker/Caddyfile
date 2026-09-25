@@ -1,0 +1,9 @@
+{$DRUNKIFY_SITE:drunkify.example.com} {
+	@tokenRoutes path /i/* /r/* /api/v1/invites/lookup/* /api/v1/auth/reset-password/*
+	log_skip @tokenRoutes
+
+	reverse_proxy app-prod:3000 {
+		flush_interval -1
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

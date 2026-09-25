@@ -1,0 +1,637 @@
+{
+  "$description": "CS2 theme content pack. Same keys as themes/classic.json. Words only; the app looks identical in every theme.",
+  "id": "cs2",
+  "name": "CS2",
+  "voice": "HLTV-style caster hyping a Major final. Energetic, esports vocabulary (frag, clutch, ACE, eco, map, round), still teasing, never scolding. One drink = one frag.",
+  "nav": {
+    "log": "Log",
+    "leaderboard": "Scoreboard",
+    "feed": "Feed",
+    "wrapped": "Wrapped"
+  },
+  "leaderboard": {
+    "title": "Scoreboard",
+    "subtitle": "Day {day} of {days}. Sorted by K.",
+    "columns": [
+      {
+        "key": "k",
+        "label": "K",
+        "meaning": "Std drinks (rounded)",
+        "primary": true
+      },
+      {
+        "key": "a",
+        "label": "A",
+        "meaning": "Drinks logged in sync with others (within 1 minute)"
+      },
+      {
+        "key": "d",
+        "label": "D",
+        "meaning": "Soft drinks"
+      },
+      {
+        "key": "rating",
+        "label": "Rating",
+        "meaning": "Drink Rating 2.0 composite, 2 decimals, accent colour"
+      }
+    ],
+    "you": "you",
+    "maskedNote": "The scoreboard is hidden for the last 24 hours. Every frag still counts.",
+    "maskedSort": "Sorted by name, not by score.",
+    "achievementsHeading": "Highlights",
+    "achievementsNote": "Everyone sees these",
+    "yourRankTeaser": {
+      "title": "Your rank",
+      "body": "Revealed in your Wrapped"
+    }
+  },
+  "home": {
+    "totalsYou": "You, this trip",
+    "totalsYouSub": "std drinks from {drinks} drinks",
+    "totalsSquad": "Squad",
+    "totalsSquadSub": "std from {drinks}",
+    "emptyYouSub": "No frags yet",
+    "emptySquadSub": "Warmup",
+    "again": "Another {drink}",
+    "firstDrinkHint": "Tap a coaster to open the first round.",
+    "countdown": "until the grand final"
+  },
+  "logWizard": {
+    "stepWhat": "What are you having?",
+    "againTile": "{drink} again",
+    "otherTile": "Other…",
+    "otherTileSub": "Type a name",
+    "otherPlaceholder": "What is it?",
+    "stepSize": "How big?",
+    "customSize": "Custom",
+    "customSizeSub": "Enter ml",
+    "stdUnit": "standard drinks",
+    "venueNearestHint": "Nearest place, 40 m away",
+    "noVenue": "No venue",
+    "now": "Now",
+    "note": "Note",
+    "abvScaleNote": "0.1% steps up to 15%, then 0.5%",
+    "log": "Log {qty}{drink}",
+    "save": "Save changes",
+    "delete": "Delete drink",
+    "editTitle": "Edit drink",
+    "ratingLabel": "Rating"
+  },
+  "toasts": {
+    "logged": "Logged {qty}{drink}",
+    "rateAsk": "How is it? Rate it now or later in Feed.",
+    "rated": "Rated {drink} {face}",
+    "saved": "Saved changes",
+    "deleted": "Deleted {drink}",
+    "undo": "Undo",
+    "undone": "Undone",
+    "achievementPosted": "Posted to the squad.",
+    "offlineSaved": "Saved offline, will sync."
+  },
+  "feed": {
+    "title": "Feed",
+    "mine": "Mine",
+    "everyone": "Everyone",
+    "tonight": "Tonight",
+    "dayHeading": "{weekday}, day {n}",
+    "achievementRow": "{name} unlocked {achievement}"
+  },
+  "locked": {
+    "sectionTitle": "Saved for the Wrapped",
+    "tileNote": "Unlocks in the Wrapped",
+    "tiles": [
+      "Absurd units",
+      "Roles and ranks",
+      "Fun stats",
+      "Side scoreboards",
+      "Crowd favourite",
+      "The demo replay",
+      "Pick’em",
+      "Awards"
+    ]
+  },
+  "predictions": {
+    "title": "Pick’em",
+    "subtitle": "Locks in {hours} h or at your first drink. Sealed until the grand final.",
+    "emptyCardTitle": "Lock in your pick’em",
+    "emptyCardBody": "Five calls before round one. They lock at your first drink or in {hours} hours, and stay sealed until the grand final.",
+    "emptyCardCta": "Make my picks",
+    "q1": "Your total",
+    "q1Unit": "std drinks",
+    "q2": "The squad’s total",
+    "q2Unit": "std drinks",
+    "q3": "Top frag",
+    "q4": "Bottom frag",
+    "q5": "Most-picked drink",
+    "submit": "Lock my picks",
+    "lockedTitle": "Picks locked",
+    "lockedBody": "Sealed until the grand final. Nobody can peek, not even you.",
+    "lockedCount": "{n} of {total} have locked picks",
+    "lockedCta": "Log my first drink",
+    "missedTitle": "Pick’em closed",
+    "missedBody": "You opened the first round before making picks. The other {n} still battle it out, and every other award is still in play."
+  },
+  "achievements": {
+    "first_blood": {
+      "trigger": "First drink of the trip (per person)",
+      "name": "First Blood",
+      "description": "Opening frag of the trip"
+    },
+    "five_in_hour": {
+      "trigger": "5 drinks within one hour",
+      "name": "ACE",
+      "description": "Five drinks inside an hour. Clean."
+    },
+    "pit_stop": {
+      "trigger": "Soft drink between two alcoholic drinks",
+      "name": "Eco Round",
+      "description": "Water between two rounds, saving for the next buy"
+    },
+    "pub_crawl": {
+      "trigger": "4 venues in one night",
+      "name": "Full Rotation",
+      "description": "Fourth venue tonight, every map played"
+    },
+    "mile_high": {
+      "trigger": "Drink logged on a plane",
+      "name": "Jump Throw",
+      "description": "Logged mid-air"
+    },
+    "cheers": {
+      "trigger": "3+ members log within 1 minute",
+      "name": "Executed",
+      "description": "{n} players, same minute. Textbook execute."
+    },
+    "after_3am": {
+      "trigger": "Drink logged after 3 AM",
+      "name": "Overtime",
+      "description": "Still playing after 3 a.m."
+    },
+    "critic": {
+      "trigger": "Rated 20 drinks",
+      "name": "Demo Reviewer",
+      "description": "Twenty drinks reviewed"
+    },
+    "century": {
+      "trigger": "100 drinks across the group",
+      "name": "Frag 100",
+      "description": "The squad’s hundredth frag"
+    },
+    "passport": {
+      "trigger": "Drinks in 2+ countries within 24 h",
+      "name": "Map Veto",
+      "description": "Two countries in one day"
+    },
+    "regular": {
+      "trigger": "5 visits to the same venue",
+      "name": "Home Map",
+      "description": "Fifth visit to {venue}"
+    }
+  },
+  "awards": {
+    "most_std": {
+      "criterion": "Most std drinks",
+      "name": "Major MVP"
+    },
+    "most_shots": {
+      "criterion": "Most shots",
+      "name": "Headshot Machine"
+    },
+    "fanciest": {
+      "criterion": "Fanciest drinks (wine, cocktails, premium)",
+      "name": "Skin Collector"
+    },
+    "least_logged": {
+      "criterion": "Logged the least",
+      "name": "AFK"
+    },
+    "earliest_first": {
+      "criterion": "Earliest first drink of the trip",
+      "name": "Pistol Round Winner"
+    },
+    "latest_last": {
+      "criterion": "Latest last drink of the trip",
+      "name": "1v5 Clutch"
+    },
+    "most_unique": {
+      "criterion": "Most unique drinks",
+      "name": "Map Pool Master"
+    },
+    "lowest_rating": {
+      "criterion": "Lowest average rating",
+      "name": "Toxic Teammate"
+    },
+    "highest_rating": {
+      "criterion": "Highest average rating",
+      "name": "Caster"
+    },
+    "most_consistent": {
+      "criterion": "Least day-to-day change",
+      "name": "The Machine"
+    },
+    "comeback": {
+      "criterion": "Biggest bounce back after a quiet day",
+      "name": "0–12 Comeback"
+    },
+    "venue_loyal": {
+      "criterion": "Most visits to one venue",
+      "name": "Home Map Advantage"
+    },
+    "best_predictions": {
+      "criterion": "Best predictions",
+      "name": "Pick’em Champion"
+    },
+    "night_mvp": {
+      "criterion": "Most std drinks in a single day (one per day, shown in the replay)",
+      "name": "Map MVP"
+    }
+  },
+  "archetypes": {
+    "metronome": {
+      "behaviour": "Steady pace, little day-to-day change",
+      "name": "Anchor",
+      "writeup": "{perDay} a day, every day, {days} days straight. Never top-fragged, never benched. You held the site while everyone else peeked."
+    },
+    "chaos": {
+      "behaviour": "Wild swings, late shots",
+      "name": "Entry Fragger",
+      "writeup": "First through the door, no utility, no plan. Quiet rounds, then a 2 a.m. shot out of nowhere. Nobody could read you. Including you."
+    },
+    "connoisseur": {
+      "behaviour": "Rates a lot, wine and cocktails, premium drinks",
+      "name": "IGL",
+      "writeup": "{ratings} ratings and a call for every round. You didn’t just drink the trip; you ran the strats."
+    },
+    "explorer": {
+      "behaviour": "Most unique drinks",
+      "name": "Lurker",
+      "writeup": "{unique} different drinks. Always off on your own angle of the menu, showing up somewhere nobody checked."
+    },
+    "tortoise": {
+      "behaviour": "Slow, long sessions, lasts longest",
+      "name": "Clutch Master",
+      "writeup": "Slow rounds, last one alive. When everyone else was dead by midnight, you were still in the server, closing it out."
+    },
+    "speedrunner": {
+      "behaviour": "Huge first hour, fades early",
+      "name": "Rusher",
+      "writeup": "Rush B, every night. Three drinks before the menus landed, eliminated before dessert. No regrets, no economy."
+    },
+    "designated": {
+      "behaviour": "High share of soft drinks",
+      "name": "Support",
+      "writeup": "{softShare}% of your drinks were soft. You threw the flashes, dropped the weapons, and got everyone home. Unsung. Essential."
+    },
+    "loyalist": {
+      "behaviour": "Same drink over and over",
+      "name": "One-Tap Andy",
+      "writeup": "{topDrink}, {topCount} times. Same crosshair, same angle, same drink. Why change a meta that works?"
+    },
+    "night_owl": {
+      "behaviour": "Mostly after midnight",
+      "name": "Night Shift",
+      "writeup": "{afterMidnight}% of your frags came after midnight. You only queue once the lobby empties."
+    },
+    "social": {
+      "behaviour": "Most venues and most drinks logged at the same time as others",
+      "name": "Rifler",
+      "writeup": "{venues} maps and {cheers} trades with the squad. Always in the fight, never playing alone."
+    },
+    "secondaryPrefix": "with {name} tendencies",
+    "partner": "Duo partner: {name}",
+    "partnerNote": "Same pace, same pick, Day {day}."
+  },
+  "ranks": {
+    "basis": "Std drinks per day of the trip, split into 18 equal steps of 0.85 across the same 0–15+ range as Classic. Placeholder bands.",
+    "bands": [
+      {
+        "min": 0,
+        "name": "Silver I"
+      },
+      {
+        "min": 0.85,
+        "name": "Silver II"
+      },
+      {
+        "min": 1.7,
+        "name": "Silver III"
+      },
+      {
+        "min": 2.55,
+        "name": "Silver IV"
+      },
+      {
+        "min": 3.4,
+        "name": "Silver Elite"
+      },
+      {
+        "min": 4.25,
+        "name": "Silver Elite Master"
+      },
+      {
+        "min": 5.1,
+        "name": "Gold Nova I"
+      },
+      {
+        "min": 5.95,
+        "name": "Gold Nova II"
+      },
+      {
+        "min": 6.8,
+        "name": "Gold Nova III"
+      },
+      {
+        "min": 7.65,
+        "name": "Gold Nova Master"
+      },
+      {
+        "min": 8.5,
+        "name": "Master Guardian I"
+      },
+      {
+        "min": 9.35,
+        "name": "Master Guardian II"
+      },
+      {
+        "min": 10.2,
+        "name": "Master Guardian Elite"
+      },
+      {
+        "min": 11.05,
+        "name": "Distinguished Master Guardian"
+      },
+      {
+        "min": 11.9,
+        "name": "Legendary Eagle"
+      },
+      {
+        "min": 12.75,
+        "name": "Legendary Eagle Master"
+      },
+      {
+        "min": 13.6,
+        "name": "Supreme Master First Class"
+      },
+      {
+        "min": 14.45,
+        "name": "Global Elite"
+      }
+    ]
+  },
+  "sideLeaderboards": {
+    "most_drinks": "Most frags",
+    "most_litres": "Most litres",
+    "most_variety": "Deepest map pool",
+    "best_pacer": "Best economy",
+    "earliest_first": "Opening duel",
+    "latest_last": "Last alive",
+    "longest_streak": "Longest win streak"
+  },
+  "wrappedPersonal": {
+    "notification": {
+      "title": "{trip}: match report is live",
+      "body": "The numbers are in. Brace."
+    },
+    "ready": {
+      "pre": "{days} days. {members} players. One server.",
+      "title": "Your match report is in.",
+      "body": "Watch yours now. The grand final goes live when {owner} hits play.",
+      "cta": "Watch my match report"
+    },
+    "nav": {
+      "tap": "Tap to continue",
+      "swipe": "Swipe for the next one"
+    },
+    "cards": {
+      "01_cold_open": {
+        "lead": "Ladies and gentlemen.",
+        "value": "{totalDrinks}",
+        "unit": "frags in {days} days.",
+        "note": "One drink, one frag. Halves count as assists."
+      },
+      "02_absurd_units": {
+        "real": "{litres} litres.",
+        "realSub": "{ukPints} UK pints. {std} std drinks.",
+        "lead": "Converted to utility,",
+        "absurdValue": "{absurdValue}",
+        "absurdUnit": "{absurdUnitPhrase}. Full buy.",
+        "empty": "Zero frags. Zero litres. A full eco round, technically."
+      },
+      "03_guess_ethanol": {
+        "question": "Call it. How much pure alcohol went down?",
+        "guessLabel": "Your call",
+        "actualLabel": "Actual",
+        "result": "Off by {diff}.",
+        "noteLow": "The whole server lowballs it. You lowballed harder.",
+        "noteHigh": "Overcalled. Bold strat.",
+        "noteClose": "Pixel-perfect. Check this player."
+      },
+      "04_abv_share": {
+        "abv": "Average ABV: {avgAbv}.",
+        "share": "{share}% of the squad’s damage was you.",
+        "note": "Carry potential: noted.",
+        "empty": "No damage dealt. 0% of the squad’s total. Full eco all trip."
+      },
+      "05_peak_day": {
+        "lead": "Day {peakDay}.",
+        "roast": "That one goes in the highlight reel.",
+        "note": "{peakDrinks} frags. {peakVenues} maps. One {peakDrink} clutch at {peakTime}."
+      },
+      "06_trail": {
+        "title": "Your rotations",
+        "venue": "Home map: {venue}, {visits} visits.",
+        "note": "{km} km of rotations. Walked, allegedly.",
+        "empty": "No map data. You played, but the demo lost your position."
+      },
+      "07_top_then_guilty": {
+        "topLead": "Your main:",
+        "top": "{topRated}",
+        "topNote": "Rated {topFace} every round.",
+        "guiltyLead": "But the demo doesn’t lie.",
+        "guilty": "{guilty}",
+        "guiltyNote": "Rated {guiltyFace}. Bought {guiltyCount} times anyway.",
+        "noGuilty": "Your main: {topRated}, rated {topRatingValue} every round. No guilty pleasure this run — clean scoreline."
+      },
+      "08_loyal_or_adventurous": {
+        "title": "One-tap or map pool?",
+        "loyal": "{topShare}% of your frags were {topDrink}.",
+        "adventurous": "{unique} different drinks in your pool.",
+        "verdict": {
+          "loyal": "Verdict: one-tap. {topShare}% of your frags were {topDrink}.",
+          "adventurous": "Verdict: map pool max. {unique} different drinks in rotation."
+        }
+      },
+      "09_absurd_run": {
+        "liverMiles": "Your ethanol would drive a car {km} km.",
+        "liverNote": "That’s {place} and back. Rush.",
+        "economy": "Estimated spend: {spend}.",
+        "economyNote": "That’s {gdpShare} of {country}’s GDP. Full eco after this."
+      },
+      "10_pace_twin": {
+        "lead": "You and {twin}",
+        "line": "were the same player on Day {day}.",
+        "note": "{matchPct}% in sync. Trade kills all night."
+      },
+      "11_achievements": {
+        "title": "{n} highlights unlocked",
+        "note": "Clip it. Post it."
+      },
+      "12_prediction_vs_reality": {
+        "lead": "Your pick’em said",
+        "predicted": "{predicted} std drinks.",
+        "actualLead": "The server said",
+        "actual": "{actual}.",
+        "noteOver": "Bold call. Wrong call.",
+        "noteUnder": "Underrated yourself. Classic sandbagging."
+      },
+      "13_rank": {
+        "lead": "Your rank.",
+        "drumroll": "Loading…",
+        "rank": "{rank}",
+        "note": "{perDay} std drinks a day."
+      },
+      "14_archetype": {
+        "lead": "Your role",
+        "name": "{archetype}",
+        "secondary": "with {secondary} tendencies",
+        "writeup": "{writeup}",
+        "partner": "Duo partner: {twin}",
+        "share": "Share",
+        "replay": "Watch again",
+        "waiting": "Waiting for the grand final…",
+        "noPartner": "{archetype}. {perDay} a day for {days} days, {ratings} ratings, {unique} drinks in the pool, {softShare}% soft, {topDrink} on repeat ({topCount} buys), {afterMidnight}% after midnight, {venues} maps, {cheers} trades. No duo partner this run — a true solo queue."
+      }
+    }
+  },
+  "wrappedSquad": {
+    "title": "Grand final",
+    "guestSub": "Eleven rounds. Best watched on the big screen.",
+    "waitingTitle": "Waiting for {owner}",
+    "waitingBody": "{owner} goes live once the squad is in one room with a screen.",
+    "rewatch": "Rewatch my match report",
+    "ownerSub": "You’re the TO. Go live when the room is ready.",
+    "ownerWatched": "{n} of {total} have watched their own",
+    "start": "Go live",
+    "cast": "Show on a TV first",
+    "presenting": "Presenting on {device}",
+    "reveal": "Reveal the MVP",
+    "back": "Back",
+    "hold": "Hold",
+    "footer": "Grand final, round {n} of 11",
+    "cards": {
+      "01_group_total": {
+        "lead": "Total squad damage",
+        "value": "{groupStd}",
+        "unit": "standard drinks.",
+        "absurd": "Or {absurdValue} {absurdUnitPhrase}."
+      },
+      "02_drunk_o_meter": {
+        "title": "Round history",
+        "incident": "Momentum swing {n}: {day}, {time}",
+        "note": "Every spike is a highlight. Some of you were there for it.",
+        "empty": "No round history. Full eco the whole trip."
+      },
+      "03_keg": {
+        "lead": "The squad cleared",
+        "value": "{kegPct}%",
+        "unit": "of a pub keg.",
+        "note": "Full buy every round."
+      },
+      "04_cities_venues": {
+        "title": "Map pool",
+        "top": "Home map: {venue}",
+        "note": "{cities} cities, {venues} maps.",
+        "empty": "No map data recorded. Location unknown, GG."
+      },
+      "05_crowd_then_divisive": {
+        "favLead": "Crowd favourite",
+        "fav": "{drink}",
+        "divLead": "Most contested",
+        "div": "{drink}",
+        "divNote": "{lowName} rated it {low}. {highName} rated it {high}. Take it to the forums.",
+        "noCrowd": "Not enough votes for a crowd favourite this round.",
+        "noDivisive": "No contested calls this round — suspiciously unanimous."
+      },
+      "06_replay": {
+        "title": "Demo replay",
+        "nightMvp": "Map MVP: {name}",
+        "controls": {
+          "play": "Play",
+          "pause": "Pause",
+          "export": "Save as video"
+        },
+        "empty": "No frags, no demo. Empty server."
+      },
+      "07_side_boards": {
+        "title": "Side scoreboards",
+        "note": "Everyone gets a clip."
+      },
+      "08_predictions": {
+        "title": "Pick’em results",
+        "row": "{name} called {predicted}. Actual: {actual}.",
+        "oracle": "Pick’em Champion: {name}",
+        "empty": "No Pick’em Champion this round — nobody locked in a pick."
+      },
+      "09_awards": {
+        "title": "Awards",
+        "award": "{award}",
+        "winner": "{name}",
+        "ghostNote": "Connection interrupted. For nine days."
+      },
+      "10_main_board": {
+        "title": "Scoreboard",
+        "subtitle": "Grand final. Bottom frag up. One player left.",
+        "mvp": "Major MVP",
+        "remoteTip": "Let the crowd call it before you reveal."
+      },
+      "11_credits": {
+        "title": "GG",
+        "bloopersTitle": "Blooper reel",
+        "smallest": "Smallest frag: {ml} ml of {drink}, {name}",
+        "strangestNote": "Strangest callout: “{note}”, {name}",
+        "mostEdited": "Most re-rolled entry: {drink}, {edits} times, {name}",
+        "lateWater": "The lone {time} “water”: {name}"
+      }
+    }
+  },
+  "owner": {
+    "themeLabel": "Theme",
+    "themeHint": "Renames achievements, ranks and awards",
+    "unlockLabel": "Grand final opens",
+    "change": "Change"
+  },
+  "comparisons": {
+    "absurdUnits": {
+      "bathtub": {
+        "label": {
+          "singular": "bathtub",
+          "plural": "bathtubs"
+        }
+      },
+      "olympic_pool": {
+        "label": {
+          "singular": "Olympic pool",
+          "plural": "Olympic pools"
+        }
+      },
+      "pub_keg": {
+        "label": {
+          "singular": "pub keg",
+          "plural": "pub kegs"
+        }
+      },
+      "tanker_truck": {
+        "label": {
+          "singular": "tanker truck",
+          "plural": "tanker trucks"
+        }
+      },
+      "fire_hydrant": {
+        "label": {
+          "singular": "fire hydrant",
+          "plural": "fire hydrants"
+        }
+      }
+    }
+  }
+}

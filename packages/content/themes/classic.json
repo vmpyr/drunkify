@@ -1,0 +1,594 @@
+{
+  "$description": "Classic theme content pack. Themes change words only, never visuals. Every key here must exist in every theme (see themes/cs2.json). Placeholders use {curly} names; the renderer fills them. Plain-text strings, sentence case.",
+  "id": "classic",
+  "name": "Classic",
+  "voice": "Dry, roasting pub-quiz host. Short sentences. Deadpan understatement. Teases the person, never the drinking itself. No health advice, no scolding.",
+  "nav": {
+    "log": "Log",
+    "leaderboard": "The Tab",
+    "feed": "Feed",
+    "wrapped": "Wrapped"
+  },
+  "leaderboard": {
+    "title": "The Tab",
+    "subtitle": "Day {day} of {days}. Ranked by standard drinks.",
+    "columns": [
+      {
+        "key": "std",
+        "label": "Std drinks",
+        "primary": true
+      },
+      {
+        "key": "drinks",
+        "label": "Drinks",
+        "display": "under the value, e.g. '29 drinks'"
+      }
+    ],
+    "you": "you",
+    "maskedNote": "Positions are hidden for the last 24 hours. Keep logging; it still counts.",
+    "maskedSort": "Sorted by name, not by score.",
+    "achievementsHeading": "Just unlocked",
+    "achievementsNote": "Everyone sees these",
+    "yourRankTeaser": {
+      "title": "Your rank",
+      "body": "Revealed in your Wrapped"
+    }
+  },
+  "home": {
+    "totalsYou": "You, this trip",
+    "totalsYouSub": "std drinks from {drinks} drinks",
+    "totalsSquad": "Squad",
+    "totalsSquadSub": "std from {drinks}",
+    "emptyYouSub": "No drinks yet",
+    "emptySquadSub": "Nobody’s started",
+    "again": "Another {drink}",
+    "firstDrinkHint": "Tap a coaster to log your first drink.",
+    "countdown": "until the Wrapped opens"
+  },
+  "logWizard": {
+    "stepWhat": "What are you having?",
+    "againTile": "{drink} again",
+    "otherTile": "Other…",
+    "otherTileSub": "Type a name",
+    "otherPlaceholder": "What is it?",
+    "stepSize": "How big?",
+    "customSize": "Custom",
+    "customSizeSub": "Enter ml",
+    "stdUnit": "standard drinks",
+    "venueNearestHint": "Nearest place, 40 m away",
+    "noVenue": "No venue",
+    "now": "Now",
+    "note": "Note",
+    "abvScaleNote": "0.1% steps up to 15%, then 0.5%",
+    "log": "Log {qty}{drink}",
+    "save": "Save changes",
+    "delete": "Delete drink",
+    "editTitle": "Edit drink",
+    "ratingLabel": "Rating"
+  },
+  "toasts": {
+    "logged": "Logged {qty}{drink}",
+    "rateAsk": "How is it? Rate it now or later in Feed.",
+    "rated": "Rated {drink} {face}",
+    "saved": "Saved changes",
+    "deleted": "Deleted {drink}",
+    "undo": "Undo",
+    "undone": "Undone",
+    "achievementPosted": "Posted to the group.",
+    "offlineSaved": "Saved offline, will sync."
+  },
+  "feed": {
+    "title": "Feed",
+    "mine": "Mine",
+    "everyone": "Everyone",
+    "tonight": "Tonight",
+    "dayHeading": "{weekday}, day {n}",
+    "achievementRow": "{name} unlocked {achievement}"
+  },
+  "locked": {
+    "sectionTitle": "Saved for the Wrapped",
+    "tileNote": "Unlocks in the Wrapped",
+    "tiles": [
+      "Absurd units",
+      "Archetypes and ranks",
+      "Fun stats",
+      "Side leaderboards",
+      "Crowd favourite",
+      "The replay",
+      "Predictions",
+      "Awards"
+    ]
+  },
+  "predictions": {
+    "title": "Predictions",
+    "subtitle": "Locks in {hours} h or at your first drink. Hidden from everyone until the ceremony.",
+    "emptyCardTitle": "Call it before your first drink",
+    "emptyCardBody": "Five quick guesses about the trip. They lock at your first drink or in {hours} hours, and stay hidden until the ceremony.",
+    "emptyCardCta": "Make predictions",
+    "q1": "Your total",
+    "q1Unit": "std drinks",
+    "q2": "The squad’s total",
+    "q2Unit": "std drinks",
+    "q3": "Tops the Tab",
+    "q4": "Drinks the least",
+    "q5": "Most-ordered drink",
+    "submit": "Lock predictions",
+    "lockedTitle": "Locked in",
+    "lockedBody": "Your five predictions are sealed. Nobody sees them, you included, until the ceremony.",
+    "lockedCount": "{n} of {total} have predicted",
+    "lockedCta": "Log my first drink",
+    "missedTitle": "Predictions closed",
+    "missedBody": "You logged your first drink before predicting. The other {n} still go head to head, and you’re still in every other award."
+  },
+  "achievements": {
+    "first_blood": {
+      "trigger": "First drink of the trip (per person)",
+      "name": "First Blood",
+      "description": "First drink of the trip"
+    },
+    "five_in_hour": {
+      "trigger": "5 drinks within one hour",
+      "name": "Five Alive",
+      "description": "Five drinks inside an hour."
+    },
+    "pit_stop": {
+      "trigger": "Soft drink between two alcoholic drinks",
+      "name": "Pit Stop",
+      "description": "Water between two rounds"
+    },
+    "pub_crawl": {
+      "trigger": "4 venues in one night",
+      "name": "Pub Crawler",
+      "description": "Fourth venue tonight"
+    },
+    "mile_high": {
+      "trigger": "Drink logged on a plane",
+      "name": "Mile-High Pint",
+      "description": "Logged at cruising altitude"
+    },
+    "cheers": {
+      "trigger": "3+ members log within 1 minute",
+      "name": "Cheers!",
+      "description": "{n} of you, same minute"
+    },
+    "after_3am": {
+      "trigger": "Drink logged after 3 AM",
+      "name": "Night Owl",
+      "description": "Still going after 3 a.m."
+    },
+    "critic": {
+      "trigger": "Rated 20 drinks",
+      "name": "Critic",
+      "description": "Twenty drinks rated"
+    },
+    "century": {
+      "trigger": "100 drinks across the group",
+      "name": "Century Club",
+      "description": "The squad’s hundredth drink"
+    },
+    "passport": {
+      "trigger": "Drinks in 2+ countries within 24 h",
+      "name": "Passport Stamp",
+      "description": "Two countries in one day"
+    },
+    "regular": {
+      "trigger": "5 visits to the same venue",
+      "name": "The Regular",
+      "description": "Fifth visit to {venue}"
+    }
+  },
+  "awards": {
+    "most_std": {
+      "criterion": "Most std drinks",
+      "name": "Trip MVP"
+    },
+    "most_shots": {
+      "criterion": "Most shots",
+      "name": "Shot Caller"
+    },
+    "fanciest": {
+      "criterion": "Fanciest drinks (wine, cocktails, premium)",
+      "name": "Wine Snob"
+    },
+    "least_logged": {
+      "criterion": "Logged the least",
+      "name": "The Ghost"
+    },
+    "earliest_first": {
+      "criterion": "Earliest first drink of the trip",
+      "name": "Early Bird"
+    },
+    "latest_last": {
+      "criterion": "Latest last drink of the trip",
+      "name": "Last One Standing"
+    },
+    "most_unique": {
+      "criterion": "Most unique drinks",
+      "name": "Most Adventurous"
+    },
+    "lowest_rating": {
+      "criterion": "Lowest average rating",
+      "name": "Harshest Critic"
+    },
+    "highest_rating": {
+      "criterion": "Highest average rating",
+      "name": "Hype Man"
+    },
+    "most_consistent": {
+      "criterion": "Least day-to-day change",
+      "name": "Most Consistent"
+    },
+    "comeback": {
+      "criterion": "Biggest bounce back after a quiet day",
+      "name": "Comeback Kid"
+    },
+    "venue_loyal": {
+      "criterion": "Most visits to one venue",
+      "name": "Venue Legend of {venue}"
+    },
+    "best_predictions": {
+      "criterion": "Best predictions",
+      "name": "Oracle"
+    },
+    "night_mvp": {
+      "criterion": "Most std drinks in a single day (one per day, shown in the replay)",
+      "name": "Night MVP"
+    }
+  },
+  "archetypes": {
+    "metronome": {
+      "behaviour": "Steady pace, little day-to-day change",
+      "name": "The Metronome",
+      "writeup": "{perDay} drinks a day, give or take a sip, for {days} days straight. You never led the Tab and never left it. Your moon is in a pint glass; your rising sign is last orders."
+    },
+    "chaos": {
+      "behaviour": "Wild swings, late shots",
+      "name": "Chaos Agent",
+      "writeup": "Quiet Tuesday, then a shot at 2 a.m. nobody asked for. Your graph looks like a heart monitor at a rave. Nobody could predict you, least of all you."
+    },
+    "connoisseur": {
+      "behaviour": "Rates a lot, wine and cocktails, premium drinks",
+      "name": "The Connoisseur",
+      "writeup": "{ratings} ratings, a working vocabulary for tannins and a strong opinion on garnish. You didn’t drink the trip; you reviewed it."
+    },
+    "explorer": {
+      "behaviour": "Most unique drinks",
+      "name": "The Explorer",
+      "writeup": "{unique} different drinks. You never ordered the same thing twice if a menu had a second page. Bartenders will speak of you."
+    },
+    "tortoise": {
+      "behaviour": "Slow, long sessions, lasts longest",
+      "name": "The Tortoise",
+      "writeup": "Slow start, no finish line. While others burned out by midnight, you were still nursing the same pint, and then another."
+    },
+    "speedrunner": {
+      "behaviour": "Huge first hour, fades early",
+      "name": "The Speedrunner",
+      "writeup": "Three drinks before the menus arrived, asleep before dessert. A glorious sprint, every single night."
+    },
+    "designated": {
+      "behaviour": "High share of soft drinks",
+      "name": "Designated Hero",
+      "writeup": "{softShare}% of your drinks were soft. Somebody had to remember where the hotel was. It was you. It was always you."
+    },
+    "loyalist": {
+      "behaviour": "Same drink over and over",
+      "name": "The Loyalist",
+      "writeup": "{topDrink}, {topCount} times. The menu was a formality. {topDrink} should be paying you."
+    },
+    "night_owl": {
+      "behaviour": "Mostly after midnight",
+      "name": "Night Owl",
+      "writeup": "{afterMidnight}% of your drinks came after midnight. Daylight is a rumour you’ve heard about."
+    },
+    "social": {
+      "behaviour": "Most venues and most drinks logged at the same time as others",
+      "name": "Social Butterfly",
+      "writeup": "{venues} venues and {cheers} cheers with the squad. You never drank alone and never stayed anywhere long."
+    },
+    "secondaryPrefix": "with a streak of {name}",
+    "partner": "Drinking partner: {name}",
+    "partnerNote": "Same pace, same drink, Day {day}."
+  },
+  "ranks": {
+    "basis": "Std drinks per day of the trip. Bands are placeholders; tune after a test trip.",
+    "bands": [
+      {
+        "min": 0,
+        "name": "Teetotaller"
+      },
+      {
+        "min": 0.5,
+        "name": "Sipper"
+      },
+      {
+        "min": 1.5,
+        "name": "Lightweight"
+      },
+      {
+        "min": 3,
+        "name": "Social Drinker"
+      },
+      {
+        "min": 4.5,
+        "name": "Regular"
+      },
+      {
+        "min": 6,
+        "name": "Pub Veteran"
+      },
+      {
+        "min": 8,
+        "name": "Barfly"
+      },
+      {
+        "min": 10,
+        "name": "The Tank"
+      },
+      {
+        "min": 12,
+        "name": "Legend"
+      },
+      {
+        "min": 15,
+        "name": "Liver of Steel"
+      }
+    ]
+  },
+  "sideLeaderboards": {
+    "most_drinks": "Most drinks",
+    "most_litres": "Most litres",
+    "most_variety": "Most variety",
+    "best_pacer": "Best pacer",
+    "earliest_first": "Earliest first drink",
+    "latest_last": "Latest last drink",
+    "longest_streak": "Longest daily streak"
+  },
+  "wrappedPersonal": {
+    "notification": {
+      "title": "{trip}: Wrapped is out",
+      "body": "We need to talk."
+    },
+    "ready": {
+      "pre": "{days} days, {members} people, one tab.",
+      "title": "Your Wrapped is ready.",
+      "body": "Watch yours now. The squad ceremony starts when {owner} hits play.",
+      "cta": "Watch my Wrapped"
+    },
+    "nav": {
+      "tap": "Tap to continue",
+      "swipe": "Swipe for the next one"
+    },
+    "cards": {
+      "01_cold_open": {
+        "lead": "We need to talk.",
+        "value": "{totalDrinks}",
+        "unit": "drinks in {days} days.",
+        "note": "Half pints counted as halves. We were fair."
+      },
+      "02_absurd_units": {
+        "real": "{litres} litres.",
+        "realSub": "{ukPints} UK pints. {std} std drinks.",
+        "lead": "Or, if you prefer,",
+        "absurdValue": "{absurdValue}",
+        "absurdUnit": "{absurdUnitPhrase}.",
+        "empty": "Zero litres. Zero pints. Zero units of anything. A statement, in its own way."
+      },
+      "03_guess_ethanol": {
+        "question": "How much pure alcohol do you think you drank?",
+        "guessLabel": "Your guess",
+        "actualLabel": "Actual",
+        "result": "Off by {diff}.",
+        "noteLow": "Everyone guesses low. You guessed lower.",
+        "noteHigh": "You guessed high. Optimist.",
+        "noteClose": "Within a sip. Suspicious."
+      },
+      "04_abv_share": {
+        "abv": "Average ABV: {avgAbv}.",
+        "share": "You drank {share}% of the trip’s alcohol.",
+        "note": "One in every {oneIn} sips. Roughly.",
+        "empty": "No alcohol, no average, no share. You sat this one out."
+      },
+      "05_peak_day": {
+        "lead": "Day {peakDay}.",
+        "roast": "We don’t talk about Day {peakDay}.",
+        "note": "{peakDrinks} drinks. {peakVenues} venues. One {peakDrink} incident at {peakTime}."
+      },
+      "06_trail": {
+        "title": "Your trail",
+        "venue": "Most visited: {venue}, {visits} times.",
+        "note": "{km} km between drinks. Walked, allegedly.",
+        "empty": "No pins on the map. You were somewhere. Nobody can say where."
+      },
+      "07_top_then_guilty": {
+        "topLead": "Your favourite:",
+        "top": "{topRated}",
+        "topNote": "Rated {topFace} every time.",
+        "guiltyLead": "And yet.",
+        "guilty": "{guilty}",
+        "guiltyNote": "Rated {guiltyFace}. Ordered {guiltyCount} times.",
+        "noGuilty": "Your favourite: {topRated}, rated {topRatingValue} every time. No guilty pleasure this trip — suspiciously disciplined."
+      },
+      "08_loyal_or_adventurous": {
+        "title": "Loyal or adventurous?",
+        "loyal": "{topShare}% of your drinks were {topDrink}.",
+        "adventurous": "{unique} different drinks tried.",
+        "verdict": {
+          "loyal": "Verdict: loyal. {topShare}% of your drinks were {topDrink}.",
+          "adventurous": "Verdict: adventurous. {unique} different drinks and counting."
+        }
+      },
+      "09_absurd_run": {
+        "liverMiles": "Your ethanol would drive a car {km} km.",
+        "liverNote": "That’s {place} and back.",
+        "economy": "You spent about {spend}.",
+        "economyNote": "That’s {gdpShare} of {country}’s GDP. Per second."
+      },
+      "10_pace_twin": {
+        "lead": "You and {twin}",
+        "line": "were basically one organism on Day {day}.",
+        "note": "Drink for drink, {matchPct}% in sync."
+      },
+      "11_achievements": {
+        "title": "{n} achievements unlocked",
+        "note": "Not bad. Not good either. Achievements."
+      },
+      "12_prediction_vs_reality": {
+        "lead": "On day one you said",
+        "predicted": "{predicted} std drinks.",
+        "actualLead": "Reality said",
+        "actual": "{actual}.",
+        "noteOver": "Confident. Wrong, but confident.",
+        "noteUnder": "You underestimated yourself. Rare."
+      },
+      "13_rank": {
+        "lead": "Your rank.",
+        "drumroll": "Drumroll.",
+        "rank": "{rank}",
+        "note": "{perDay} std drinks a day."
+      },
+      "14_archetype": {
+        "lead": "You are",
+        "name": "{archetype}",
+        "secondary": "with a streak of {secondary}",
+        "writeup": "{writeup}",
+        "partner": "Drinking partner: {twin}",
+        "share": "Share",
+        "replay": "Watch again",
+        "waiting": "Waiting for the ceremony…",
+        "noPartner": "{archetype}. {perDay} a day for {days} days, {ratings} ratings, {unique} drinks tried, {softShare}% soft, {topDrink} on repeat ({topCount} times), {afterMidnight}% after midnight, {venues} venues, {cheers} cheers. No drinking partner this trip — you did this one alone, and it shows."
+      }
+    }
+  },
+  "wrappedSquad": {
+    "title": "Squad Wrapped",
+    "guestSub": "Eleven cards. Made to watch together.",
+    "waitingTitle": "Waiting for {owner}",
+    "waitingBody": "{owner} starts the ceremony. Get everyone in one room with a screen.",
+    "rewatch": "Rewatch my Wrapped",
+    "ownerSub": "You’re the owner. It starts when you say.",
+    "ownerWatched": "{n} of {total} have watched their own",
+    "start": "Start the ceremony",
+    "cast": "Show on a TV first",
+    "presenting": "Presenting on {device}",
+    "reveal": "Reveal #1",
+    "back": "Back",
+    "hold": "Hold",
+    "footer": "Squad Wrapped, card {n} of 11",
+    "cards": {
+      "01_group_total": {
+        "lead": "Together, you drank",
+        "value": "{groupStd}",
+        "unit": "standard drinks.",
+        "absurd": "Or {absurdValue} {absurdUnitPhrase}."
+      },
+      "02_drunk_o_meter": {
+        "title": "The drunk-o-meter",
+        "incident": "Incident {n}: {day}, {time}",
+        "note": "Every spike has a story. Some of you remember it.",
+        "empty": "No incidents to report. Nobody drank a drop."
+      },
+      "03_keg": {
+        "lead": "You emptied",
+        "value": "{kegPct}%",
+        "unit": "of a pub keg.",
+        "note": "The landlord would like a word."
+      },
+      "04_cities_venues": {
+        "title": "Where it happened",
+        "top": "Top venue: {venue}",
+        "note": "{cities} cities, {venues} venues.",
+        "empty": "No venues logged. You were all somewhere. Nobody knows where."
+      },
+      "05_crowd_then_divisive": {
+        "favLead": "Crowd favourite",
+        "fav": "{drink}",
+        "divLead": "Most divisive",
+        "div": "{drink}",
+        "divNote": "Rated {low} by {lowName} and {high} by {highName}. Discuss.",
+        "noCrowd": "Not enough ratings for a crowd favourite this time.",
+        "noDivisive": "Nobody disagreed enough to crown a most divisive drink."
+      },
+      "06_replay": {
+        "title": "The replay",
+        "nightMvp": "Night MVP: {name}",
+        "controls": {
+          "play": "Play",
+          "pause": "Pause",
+          "export": "Save as video"
+        },
+        "empty": "No drinks, no replay. A quiet one."
+      },
+      "07_side_boards": {
+        "title": "Everybody wins something",
+        "note": "Almost."
+      },
+      "08_predictions": {
+        "title": "Predictions",
+        "row": "{name} said {predicted}. Reality: {actual}.",
+        "oracle": "The Oracle: {name}",
+        "empty": "Nobody predicted this time, so there’s no Oracle to crown."
+      },
+      "09_awards": {
+        "title": "And the award goes to",
+        "award": "{award}",
+        "winner": "{name}",
+        "ghostNote": "Present in spirit. Mostly spirits."
+      },
+      "10_main_board": {
+        "title": "The Tab",
+        "subtitle": "Final standings, last place up. One name left.",
+        "mvp": "Trip MVP",
+        "remoteTip": "Pause here. Ask the room who they think it is."
+      },
+      "11_credits": {
+        "title": "Credits",
+        "bloopersTitle": "Bloopers",
+        "smallest": "Smallest drink: {ml} ml of {drink}, {name}",
+        "strangestNote": "Strangest note: “{note}”, {name}",
+        "mostEdited": "Most edited entry: {drink}, {edits} times, {name}",
+        "lateWater": "The lone {time} “water”: {name}"
+      }
+    }
+  },
+  "owner": {
+    "themeLabel": "Theme",
+    "themeHint": "Renames achievements, ranks and awards",
+    "unlockLabel": "Wrapped opens",
+    "change": "Change"
+  },
+  "comparisons": {
+    "absurdUnits": {
+      "bathtub": {
+        "label": {
+          "singular": "bathtub",
+          "plural": "bathtubs"
+        }
+      },
+      "olympic_pool": {
+        "label": {
+          "singular": "Olympic pool",
+          "plural": "Olympic pools"
+        }
+      },
+      "pub_keg": {
+        "label": {
+          "singular": "pub keg",
+          "plural": "pub kegs"
+        }
+      },
+      "tanker_truck": {
+        "label": {
+          "singular": "tanker truck",
+          "plural": "tanker trucks"
+        }
+      },
+      "fire_hydrant": {
+        "label": {
+          "singular": "fire hydrant",
+          "plural": "fire hydrants"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "currency": "EUR",
+  "categoryPrices": { "beer": 5, "wine": 7, "cocktail": 11, "spirit": 7, "shot": 5, "cider": 6, "seltzer": 5, "soft": 3, "other": 6 },
+  "gdpComparison": { "referenceCountry": "Malta", "gdpPerSecondEUR": 466 }
+}

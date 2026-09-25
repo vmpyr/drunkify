@@ -1,0 +1,63 @@
+{
+  "name": "@drunkify/content",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./css/tokens.css"
+  ],
+  "files": [
+    "dist",
+    "css",
+    "icons",
+    "themes",
+    "auth.json",
+    "catalog.json",
+    "comparisons.json",
+    "prices.json",
+    "tokens.json"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./types": {
+      "types": "./dist/src/types.d.ts",
+      "import": "./dist/src/types.js"
+    },
+    "./expected-vars": {
+      "types": "./dist/src/expected-vars.d.ts",
+      "import": "./dist/src/expected-vars.js"
+    },
+    "./design-tokens": {
+      "types": "./dist/src/tokens.d.ts",
+      "import": "./dist/src/tokens.js"
+    },
+    "./css/tokens.css": "./css/tokens.css",
+    "./auth.json": "./auth.json",
+    "./catalog.json": "./catalog.json",
+    "./comparisons.json": "./comparisons.json",
+    "./prices.json": "./prices.json",
+    "./tokens.json": "./tokens.json",
+    "./themes/*.json": "./themes/*.json",
+    "./icons/*": "./icons/*"
+  },
+  "scripts": {
+    "build": "pnpm run tokens:build && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "content:check": "node --experimental-strip-types scripts/build-tokens.ts --check && node --experimental-strip-types ../../scripts/check-pack-parity.ts",
+    "tokens:build": "node --experimental-strip-types scripts/build-tokens.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

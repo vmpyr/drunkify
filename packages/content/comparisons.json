@@ -1,0 +1,15 @@
+{
+  "absurdUnits": {
+    "bathtub":       { "volumeL": 150,       "displayAs": "count"   },
+    "olympic_pool":  { "volumeL": 2500000,   "displayAs": "percent" },
+    "pub_keg":       { "volumeL": 50,        "displayAs": "count"   },
+    "tanker_truck":  { "volumeL": 30000,     "displayAs": "count"   },
+    "fire_hydrant":  { "volumeL": 4000,      "displayAs": "minutes" }
+  },
+  "liverMilesKmPerL": 8.5,
+  "liverMilesReferenceDistances": [
+    { "label": "London to Paris", "km": 344 },
+    { "label": "New York to Boston", "km": 306 },
+    { "label": "the length of Route 66", "km": 3945 }
+  ]
+}

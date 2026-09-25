@@ -1,0 +1,36 @@
+{
+  "$description": "Seed drink catalogue used by the log wizard. Popular options per category, in display order. ABV is the pre-fill and snaps to the ABV slider scale (0.1% below 15%, 0.5% above). Sizes are in ml. defaultSize is used the first time a person logs a category; after that the person's last size for that drink wins. Custom names typed via 'Other…' are stored per person per category and shown first next time. Localise popular lists per trip location later (V2).",
+  "standardDrink": { "gramsPerStd": 10, "ethanolDensity": 0.789, "formula": "std = ml × (abv / 100) × 0.789 / 10 × quantity" },
+  "abvSlider": {
+    "min": 0, "max": 80,
+    "segments": [ { "from": 0, "to": 15, "step": 0.1, "positions": 150 }, { "from": 15, "to": 80, "step": 0.5, "positions": 130 } ],
+    "totalPositions": 280,
+    "posToAbv": "p <= 150 ? p / 10 : 15 + (p - 150) * 0.5",
+    "abvToPos": "a <= 15 ? round(a * 10) : 150 + round((a - 15) / 0.5)",
+    "ticks": [0, 5, 10, 15, 30, 50, 80],
+    "nudge": "− / + move one step. Going down from exactly 15 uses 0.1; going up from exactly 15 uses 0.5.",
+    "display": "One decimal below or at 15% (e.g. 5.0%). Above 15%, whole numbers when whole (40%), otherwise one decimal (15.5%)."
+  },
+  "categories": [
+    { "id": "beer",     "name": "Beer",     "defaultSize": 568, "sizes": [ { "ml": 250, "label": "250 ml" }, { "ml": 330, "label": "330 ml" }, { "ml": 500, "label": "500 ml" }, { "ml": 568, "label": "Pint" } ],
+      "drinks": [ ["Lager", 5.0], ["IPA", 6.0], ["Stout", 4.2], ["Pilsner", 4.8], ["Wheat beer", 5.2] ] },
+    { "id": "wine",     "name": "Wine",     "defaultSize": 175, "sizes": [ { "ml": 125, "label": "125 ml" }, { "ml": 175, "label": "175 ml" }, { "ml": 250, "label": "250 ml" }, { "ml": 750, "label": "Bottle" } ],
+      "drinks": [ ["Red", 13.5], ["White", 12.0], ["Rosé", 12.0], ["Prosecco", 11.0], ["Champagne", 12.0] ] },
+    { "id": "cocktail", "name": "Cocktail", "defaultSize": 150, "sizes": [ { "ml": 90, "label": "90 ml" }, { "ml": 150, "label": "150 ml" }, { "ml": 250, "label": "250 ml" } ],
+      "drinks": [ ["Negroni", 24.0], ["Margarita", 18.0], ["Aperol spritz", 8.0], ["Mojito", 10.0], ["Espresso martini", 16.0], ["Old fashioned", 30.0] ] },
+    { "id": "spirit",   "name": "Spirit",   "defaultSize": 40,  "sizes": [ { "ml": 20, "label": "20 ml" }, { "ml": 40, "label": "40 ml" }, { "ml": 60, "label": "60 ml" } ],
+      "drinks": [ ["Whisky", 40.0], ["Gin", 40.0], ["Rum", 40.0], ["Vodka", 40.0], ["Tequila", 38.0] ] },
+    { "id": "shot",     "name": "Shot",     "defaultSize": 40,  "sizes": [ { "ml": 20, "label": "20 ml" }, { "ml": 40, "label": "40 ml" }, { "ml": 60, "label": "60 ml" } ],
+      "drinks": [ ["Tequila", 38.0], ["Jägermeister", 35.0], ["Sambuca", 38.0], ["B-52", 26.0] ] },
+    { "id": "cider",    "name": "Cider",    "defaultSize": 500, "sizes": [ { "ml": 330, "label": "330 ml" }, { "ml": 500, "label": "500 ml" }, { "ml": 568, "label": "Pint" } ],
+      "drinks": [ ["Apple", 4.5], ["Pear", 4.5], ["Dry", 6.0] ] },
+    { "id": "seltzer",  "name": "Seltzer",  "defaultSize": 330, "sizes": [ { "ml": 330, "label": "330 ml" }, { "ml": 355, "label": "355 ml" } ],
+      "drinks": [ ["Hard seltzer", 5.0] ] },
+    { "id": "soft",     "name": "Soft",     "defaultSize": 330, "sizes": [ { "ml": 250, "label": "250 ml" }, { "ml": 330, "label": "330 ml" }, { "ml": 500, "label": "500 ml" } ],
+      "drinks": [ ["Water", 0.0], ["Cola", 0.0], ["Lemonade", 0.0], ["Alcohol-free beer", 0.5] ] },
+    { "id": "other",    "name": "Other",    "defaultSize": 150, "sizes": [ { "ml": 50, "label": "50 ml" }, { "ml": 150, "label": "150 ml" }, { "ml": 330, "label": "330 ml" } ],
+      "drinks": [] }
+  ],
+  "ratingScale": [ { "value": 1, "face": "🤮" }, { "value": 2, "face": "😐" }, { "value": 3, "face": "🙂" }, { "value": 4, "face": "😍" }, { "value": 5, "face": "🔥" } ],
+  "note": "The prototype uses Lisbon-flavoured examples (Guinness, Super Bock, Ginjinha, Vinho verde) as sample data only. Brand names in a shipped catalogue need a licensing check."
+}
