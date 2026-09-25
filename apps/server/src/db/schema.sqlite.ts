@@ -273,6 +273,69 @@ export const favourites = sqliteTable(
   ],
 );
 
+export const predictions = sqliteTable(
+  'predictions',
+  {
+    id: text('id').primaryKey(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    q1MyTotalStd: real('q1_my_total_std'),
+    q2GroupTotalStd: real('q2_group_total_std'),
+    q3TopMemberId: text('q3_top_member_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    q4LeastMemberId: text('q4_least_member_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    q5TopDrink: text('q5_top_drink'),
+    q5TopDrinkCategory: text('q5_top_drink_category'),
+    lockedAt: integer('locked_at'),
+    createdAt: integer('created_at').notNull().default(nowMs),
+    updatedAt: integer('updated_at').notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex('ux_predictions_trip_user').on(table.tripId, table.userId),
+    check(
+      'ck_predictions_q5_top_drink_category',
+      sql`${table.q5TopDrinkCategory} in ('beer','wine','cocktail','spirit','shot','cider','seltzer','soft','other')`,
+    ),
+  ],
+);
+
+export const achievementUnlocks = sqliteTable(
+  'achievement_unlocks',
+  {
+    id: text('id').primaryKey(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    triggeredByUserId: text('triggered_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    achievementKey: text('achievement_key').notNull(),
+    drinkId: text('drink_id').references(() => drinks.id, { onDelete: 'set null' }),
+    vars: text('vars', { mode: 'json' })
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'`),
+    unlockedAt: integer('unlocked_at').notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex('ux_achievement_unlocks_personal')
+      .on(table.tripId, table.userId, table.achievementKey)
+      .where(sql`${table.userId} is not null`),
+    uniqueIndex('ux_achievement_unlocks_group')
+      .on(table.tripId, table.achievementKey)
+      .where(sql`${table.userId} is null`),
+    index('ix_achievement_unlocks_trip_unlocked').on(table.tripId, table.unlockedAt),
+  ],
+);
+
 export const appliedOps = sqliteTable(
   'applied_ops',
   {
@@ -312,6 +375,8 @@ export const schemaTables = {
   drinks,
   customDrinkNames,
   favourites,
+  predictions,
+  achievementUnlocks,
   appliedOps,
   appMeta,
 };

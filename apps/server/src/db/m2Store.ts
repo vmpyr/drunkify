@@ -2,7 +2,12 @@ import type BetterSqlite3 from 'better-sqlite3';
 import type pg from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
-import { pendingTransitions, stdDrinks } from '@drunkify/shared';
+import {
+  computePredictionWindow,
+  evaluateAchievementPredicates,
+  pendingTransitions,
+  stdDrinks,
+} from '@drunkify/shared';
 
 import type { DatabaseContext } from './createDb.js';
 
@@ -158,6 +163,7 @@ export interface DrinkMutationResult {
   statusCode: number;
   body: Record<string, unknown>;
   applied?: boolean;
+  unlocks?: AchievementUnlock[];
 }
 
 export interface LeaderboardRow {
@@ -177,9 +183,39 @@ export interface FeedDrink {
   memberName: string;
 }
 
+export interface FeedAchievement {
+  unlock: AchievementUnlock;
+  memberName: string | null;
+}
+
 export interface PhaseTransitionClaim {
   tripId: string;
   phase: 'final_24h' | 'wrapped_unlocked';
+}
+
+export interface PredictionAnswers {
+  myTotalStd: number;
+  groupTotalStd: number;
+  topMemberId: string;
+  leastMemberId: string;
+  topDrink: string;
+  topDrinkCategory: DrinkCategory;
+}
+
+export interface PredictionState {
+  state: 'open' | 'locked' | 'missed';
+  deadlineAt: number;
+  missedDismissed: boolean;
+}
+
+export interface AchievementUnlock {
+  key: string;
+  userId: string | null;
+  triggeredByUserId: string;
+  tripId: string;
+  drinkId: string | null;
+  unlockedAt: number;
+  vars: Record<string, string | number>;
 }
 
 export type TokenFailure = 'invalid' | 'expired' | 'used' | 'revoked';
@@ -1125,6 +1161,75 @@ export class M2Store {
     );
   }
 
+  async #evaluateAchievements(
+    tx: SqlExecutor,
+    trigger: DrinkRecord,
+    op: 'create' | 'update',
+    now: number,
+  ): Promise<AchievementUnlock[]> {
+    const trip = await tx.get<Record<string, unknown>>(
+      'select start_date, timezone from trips where id = ?',
+      [trigger.tripId],
+    );
+    if (!trip) return [];
+    const rows = await tx.all<Record<string, unknown>>(
+      'select * from drinks where trip_id = ? order by drunk_at asc, id asc',
+      [trigger.tripId],
+    );
+    const all = rows.map(normalizeDrink).filter((drink): drink is DrinkRecord => drink !== null);
+    const candidates = evaluateAchievementPredicates({
+      trigger: { drink: trigger, op },
+      drinks: all,
+      trip: { startDate: String(trip.start_date), timezone: String(trip.timezone) },
+    });
+
+    const unlocks: AchievementUnlock[] = [];
+    for (const candidate of candidates) {
+      const existing = await tx.get(
+        candidate.userId === null
+          ? `select 1 as value from achievement_unlocks
+             where trip_id = ? and user_id is null and achievement_key = ?`
+          : `select 1 as value from achievement_unlocks
+             where trip_id = ? and user_id = ? and achievement_key = ?`,
+        candidate.userId === null
+          ? [trigger.tripId, candidate.key]
+          : [trigger.tripId, candidate.userId, candidate.key],
+      );
+      if (existing) continue;
+      const unlock: AchievementUnlock = {
+        key: candidate.key,
+        userId: candidate.userId,
+        triggeredByUserId: candidate.triggeredByUserId,
+        tripId: trigger.tripId,
+        drinkId: candidate.drinkId,
+        unlockedAt: now,
+        vars: candidate.vars,
+      };
+      try {
+        await tx.run(
+          `insert into achievement_unlocks
+            (id, trip_id, user_id, triggered_by_user_id, achievement_key,
+             drink_id, vars, unlocked_at)
+           values (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            uuidv7(),
+            unlock.tripId,
+            unlock.userId,
+            unlock.triggeredByUserId,
+            unlock.key,
+            unlock.drinkId,
+            this.#isPostgres ? unlock.vars : JSON.stringify(unlock.vars),
+            unlock.unlockedAt,
+          ],
+        );
+        unlocks.push(unlock);
+      } catch (error) {
+        if (!String(error).toLowerCase().includes('unique')) throw error;
+      }
+    }
+    return unlocks;
+  }
+
   async #createDrink(
     tx: SqlExecutor,
     input: {
@@ -1137,6 +1242,11 @@ export class M2Store {
   ): Promise<DrinkMutationResult> {
     const gate = await this.#prepareDrinkMutation(tx, input.tripId, input.userId);
     if (gate) return gate;
+    await tx.get(
+      `select trip_id from trip_members
+       where trip_id = ? and user_id = ? ${this.#forUpdate}`,
+      [input.tripId, input.userId],
+    );
     const existing = await this.#findDrink(tx, input.id);
     if (existing) {
       if (existing.tripId === input.tripId && existing.userId === input.userId) {
@@ -1186,10 +1296,13 @@ export class M2Store {
       'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
       [input.now, input.tripId],
     );
+    const drink = (await this.#findDrink(tx, input.id))!;
+    const unlocks = await this.#evaluateAchievements(tx, drink, 'create', input.now);
     return {
       statusCode: 201,
-      body: { drink: (await this.#findDrink(tx, input.id))! },
+      body: { drink },
       applied: true,
+      unlocks,
     };
   }
 
@@ -1252,10 +1365,13 @@ export class M2Store {
       'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
       [input.now, input.tripId],
     );
+    const drink = (await this.#findDrink(tx, input.id))!;
+    const unlocks = await this.#evaluateAchievements(tx, drink, 'update', input.now);
     return {
       statusCode: 200,
-      body: { drink: (await this.#findDrink(tx, input.id))! },
+      body: { drink },
       applied: true,
+      unlocks,
     };
   }
 
@@ -1293,10 +1409,13 @@ export class M2Store {
       'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
       [input.now, input.tripId],
     );
+    const drink = (await this.#findDrink(tx, input.id))!;
+    const unlocks = await this.#evaluateAchievements(tx, drink, 'update', input.now);
     return {
       statusCode: 200,
-      body: { drink: (await this.#findDrink(tx, input.id))! },
+      body: { drink },
       applied: true,
+      unlocks,
     };
   }
 
@@ -1628,6 +1747,146 @@ export class M2Store {
     );
   }
 
+  async getPredictionState(
+    tripId: string,
+    userId: string,
+    now: number,
+  ): Promise<PredictionState | null> {
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      `select tm.joined_at, tm.first_drink_at, tm.missed_banner_dismissed,
+              t.created_at, t.ceremony_started_at, p.locked_at
+       from trip_members tm
+       join trips t on t.id = tm.trip_id
+       left join predictions p on p.trip_id = tm.trip_id and p.user_id = tm.user_id
+       where tm.trip_id = ? and tm.user_id = ?`,
+      [tripId, userId],
+    );
+    if (!row) return null;
+    return predictionStateFromRow(row, now);
+  }
+
+  async submitPrediction(input: {
+    id: string;
+    tripId: string;
+    userId: string;
+    answers: PredictionAnswers;
+    now: number;
+  }): Promise<
+    | { state: PredictionState }
+    | { failure: 'not_found' | 'already_locked' | 'window_closed' | 'invalid_member' }
+  > {
+    return this.#adapter.transaction(async (tx) => {
+      const lockedMember = await tx.get(
+        `select trip_id from trip_members
+         where trip_id = ? and user_id = ? ${this.#forUpdate}`,
+        [input.tripId, input.userId],
+      );
+      if (!lockedMember) return { failure: 'not_found' as const };
+      const row = await tx.get<Record<string, unknown>>(
+        `select tm.joined_at, tm.first_drink_at, tm.missed_banner_dismissed,
+                t.created_at, t.ceremony_started_at, p.locked_at
+         from trip_members tm
+         join trips t on t.id = tm.trip_id
+         left join predictions p on p.trip_id = tm.trip_id and p.user_id = tm.user_id
+         where tm.trip_id = ? and tm.user_id = ?`,
+        [input.tripId, input.userId],
+      );
+      if (!row) return { failure: 'not_found' as const };
+      const state = predictionStateFromRow(row, input.now);
+      if (state.state === 'locked') return { failure: 'already_locked' as const };
+      if (state.state !== 'open') return { failure: 'window_closed' as const };
+      const selectedMembers = await tx.get<{ count: number | string }>(
+        `select count(*) as count from trip_members
+         where trip_id = ? and user_id in (?, ?)`,
+        [input.tripId, input.answers.topMemberId, input.answers.leastMemberId],
+      );
+      const distinctSelected = new Set([input.answers.topMemberId, input.answers.leastMemberId])
+        .size;
+      if (Number(selectedMembers?.count ?? 0) !== distinctSelected) {
+        return { failure: 'invalid_member' as const };
+      }
+      await tx.run(
+        `insert into predictions
+          (id, trip_id, user_id, q1_my_total_std, q2_group_total_std,
+           q3_top_member_id, q4_least_member_id, q5_top_drink,
+           q5_top_drink_category, locked_at, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.id,
+          input.tripId,
+          input.userId,
+          input.answers.myTotalStd,
+          input.answers.groupTotalStd,
+          input.answers.topMemberId,
+          input.answers.leastMemberId,
+          input.answers.topDrink,
+          input.answers.topDrinkCategory,
+          input.now,
+          input.now,
+          input.now,
+        ],
+      );
+      await tx.run(
+        'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+        [input.now, input.tripId],
+      );
+      return {
+        state: {
+          ...state,
+          state: 'locked' as const,
+        },
+      };
+    });
+  }
+
+  async dismissMissedPredictionBanner(tripId: string, userId: string): Promise<boolean> {
+    const result = await this.#adapter.run(
+      `update trip_members set missed_banner_dismissed = ?
+       where trip_id = ? and user_id = ?`,
+      [this.#booleanTrue, tripId, userId],
+    );
+    return result.changes === 1;
+  }
+
+  async getPredictionStatus(tripId: string): Promise<{ submitted: number; total: number } | null> {
+    const trip = await this.getTrip(tripId);
+    if (!trip) return null;
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      `select
+         (select count(*) from predictions where trip_id = ? and locked_at is not null) submitted,
+         (select count(*) from trip_members where trip_id = ?) total`,
+      [tripId, tripId],
+    );
+    return {
+      submitted: Number(row?.submitted ?? 0),
+      total: Number(row?.total ?? 0),
+    };
+  }
+
+  async listRecentAchievementUnlocks(tripId: string, limit = 5): Promise<AchievementUnlock[]> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select * from achievement_unlocks
+       where trip_id = ? order by unlocked_at desc limit ?`,
+      [tripId, limit],
+    );
+    return rows.map(normalizeAchievementUnlock);
+  }
+
+  async getFeedAchievements(tripId: string, limit = 50): Promise<FeedAchievement[]> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select au.*, u.display_name as member_name
+       from achievement_unlocks au
+       left join users u on u.id = au.triggered_by_user_id
+       where au.trip_id = ?
+       order by au.unlocked_at desc limit ?`,
+      [tripId, limit],
+    );
+    return rows.map((row) => ({
+      unlock: normalizeAchievementUnlock(row),
+      memberName: nullableText(row.member_name),
+    }));
+  }
+
   async getLeaderboardRows(tripId: string): Promise<LeaderboardRow[]> {
     const members = await this.#adapter.all<Record<string, unknown>>(
       `select tm.user_id, tm.joined_at, u.display_name
@@ -1781,6 +2040,45 @@ export class M2Store {
     }
     return claimed;
   }
+}
+
+function predictionStateFromRow(row: Record<string, unknown>, now: number): PredictionState {
+  const joinedAt = Number(row.joined_at);
+  const createdAt = Number(row.created_at);
+  const baseDeadline = Math.max(createdAt, joinedAt) + 24 * 60 * 60 * 1000;
+  const firstDrinkAt = nullableNumber(row.first_drink_at);
+  const ceremonyStartedAt = nullableNumber(row.ceremony_started_at);
+  const deadlineAt = Math.min(
+    baseDeadline,
+    firstDrinkAt ?? Number.POSITIVE_INFINITY,
+    ceremonyStartedAt ?? Number.POSITIVE_INFINITY,
+  );
+  const lockedAt = nullableNumber(row.locked_at);
+  return {
+    state: computePredictionWindow(
+      { joinedAt, firstDrinkAt, predictionsLockedAt: lockedAt },
+      { createdAt, ceremonyStartedAt },
+      now,
+    ),
+    deadlineAt,
+    missedDismissed: Boolean(row.missed_banner_dismissed),
+  };
+}
+
+function normalizeAchievementUnlock(row: Record<string, unknown>): AchievementUnlock {
+  const vars =
+    typeof row.vars === 'string'
+      ? (JSON.parse(row.vars) as Record<string, string | number>)
+      : ((row.vars ?? {}) as Record<string, string | number>);
+  return {
+    key: String(row.achievement_key),
+    userId: nullableText(row.user_id),
+    triggeredByUserId: String(row.triggered_by_user_id),
+    tripId: String(row.trip_id),
+    drinkId: nullableText(row.drink_id),
+    unlockedAt: Number(row.unlocked_at),
+    vars,
+  };
 }
 
 function uuidLike(): string {

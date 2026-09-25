@@ -22,6 +22,13 @@
       "when": 1790362175996,
       "tag": "0002_rapid_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790364312605,
+      "tag": "0003_spooky_anita_blake",
+      "breakpoints": true
     }
   ]
 }

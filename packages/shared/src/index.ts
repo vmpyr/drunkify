@@ -1,5 +1,25 @@
 import { z } from 'zod';
 
+export {
+  ACHIEVEMENT_KEYS,
+  achievementPredicates,
+  evaluateAchievementPredicates,
+} from './achievements.js';
+export type {
+  AchievementCandidate,
+  AchievementDrink,
+  AchievementEvaluationInput,
+  AchievementKey,
+  AchievementOperation,
+  AchievementPredicate,
+} from './achievements.js';
+export { computePredictionWindow, predictionDefaults } from './predictions.js';
+export type {
+  PredictionWindowMember,
+  PredictionWindowState,
+  PredictionWindowTrip,
+} from './predictions.js';
+
 export { computePhase, pendingTransitions } from './phase.js';
 export type { PhaseTransition, TripPhase } from './phase.js';
 export { rankMembers } from './rank.js';

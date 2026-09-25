@@ -15,6 +15,7 @@ import { registerM2Routes } from './routes/m2.js';
 import { registerM3Routes } from './routes/m3.js';
 import { registerM4Routes } from './routes/m4.js';
 import { registerM5Routes } from './routes/m5.js';
+import { registerM6Routes } from './routes/m6.js';
 import { eventBus as defaultEventBus } from './realtime/eventBus.js';
 import type { EventBus } from './realtime/eventBus.js';
 import { registerRealtimeRoutes } from './realtime/sse.js';
@@ -64,6 +65,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   registerM3Routes(app, options);
   registerM4Routes(app, options);
   registerM5Routes(app, options);
+  registerM6Routes(app, options);
   registerRealtimeRoutes(app, {
     db: options.db,
     eventBus: options.eventBus ?? defaultEventBus,

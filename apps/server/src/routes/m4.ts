@@ -9,6 +9,7 @@ import { eventBus as defaultEventBus, type EventBus, tripChannel } from '../real
 import {
   DRINK_CATEGORIES,
   M2Service,
+  type AchievementUnlock,
   type DatabaseContext,
   type DrinkInput,
   type DrinkMutationResult,
@@ -123,6 +124,23 @@ function renderResult(reply: FastifyReply, result: DrinkMutationResult) {
   return reply.code(result.statusCode).send(body);
 }
 
+function publishUnlocks(eventBus: EventBus, unlocks: AchievementUnlock[] | undefined): void {
+  for (const unlock of unlocks ?? []) {
+    eventBus.publish(tripChannel(unlock.tripId), {
+      type: 'achievement.unlocked',
+      payload: {
+        tripId: unlock.tripId,
+        userId: unlock.userId,
+        triggeredByUserId: unlock.triggeredByUserId,
+        achievementKey: unlock.key,
+        drinkId: unlock.drinkId,
+        unlockedAt: unlock.unlockedAt,
+        vars: unlock.vars,
+      },
+    });
+  }
+}
+
 async function overpassCandidate(
   config: Config,
   lat: number,
@@ -200,6 +218,7 @@ export function registerM4Routes(
         payload: toDrink(drink),
       });
     }
+    publishUnlocks(eventBus, result.unlocks);
     return renderResult(reply, result);
   });
 
@@ -226,6 +245,7 @@ export function registerM4Routes(
         payload: toDrink(drink),
       });
     }
+    publishUnlocks(eventBus, result.unlocks);
     return renderResult(reply, result);
   });
 
@@ -252,6 +272,7 @@ export function registerM4Routes(
         payload: toDrink(drink),
       });
     }
+    publishUnlocks(eventBus, result.unlocks);
     return renderResult(reply, result);
   });
 
@@ -355,6 +376,7 @@ export function registerM4Routes(
                 : 'drink.updated',
           payload: op.type === 'delete' ? { id: op.drinkId } : toDrink(drink!),
         });
+        publishUnlocks(eventBus, mutation.unlocks);
       }
       results.push(
         mutation.statusCode >= 200 && mutation.statusCode < 300

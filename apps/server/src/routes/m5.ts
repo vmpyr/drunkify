@@ -129,7 +129,10 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
   app.get('/api/v1/trips/:tripId/leaderboard', async (request, reply) => {
     const trip = await requireTripMember(service, request, reply);
     if (!trip) return;
-    const source = await service.getLeaderboardRows(trip.id);
+    const [source, recentAchievements] = await Promise.all([
+      service.getLeaderboardRows(trip.id),
+      service.listRecentAchievementUnlocks(trip.id, 2),
+    ]);
     const masked = computePhase(trip, Date.now()) === 'final_24h';
     if (masked) {
       return {
@@ -146,7 +149,7 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
             rank: null,
             values: null,
           })),
-        recentAchievements: [],
+        recentAchievements,
       };
     }
     const ranked = rankMembers(
@@ -172,7 +175,7 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
           rating: row.rating,
         },
       })),
-      recentAchievements: [],
+      recentAchievements,
     };
   });
 
@@ -185,28 +188,54 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
     if (!query.success) return sendError(reply, 400, 'bad_request', 'Invalid feed query');
     const offset = cursorOffset(query.data.cursor);
     if (offset === null) return sendError(reply, 400, 'bad_request', 'Invalid cursor');
-    const rows = await service.getFeedDrinks(
-      trip.id,
-      query.data.filter === 'mine' ? request.auth!.userId : undefined,
-      offset + query.data.limit + 1,
-    );
+    const [rows, achievementRows] = await Promise.all([
+      service.getFeedDrinks(
+        trip.id,
+        query.data.filter === 'mine' ? request.auth!.userId : undefined,
+        offset + query.data.limit + 1,
+      ),
+      service.getFeedAchievements(trip.id, offset + query.data.limit + 1),
+    ]);
     const now = Date.now();
-    const items = rows.map(({ drink, memberName }) => ({
-      kind: 'drink' as const,
-      drink: toDrink(drink),
-      memberName,
-      tripDay: dayIndex(drink.drunkAt, trip.startDate, trip.timezone),
-      dayLabel: dayLabel(drink.drunkAt, now, trip.startDate, trip.timezone),
-    }));
+    const items = [
+      ...rows.map(({ drink, memberName }) => ({
+        kind: 'drink' as const,
+        drink: toDrink(drink),
+        memberName,
+        tripDay: dayIndex(drink.drunkAt, trip.startDate, trip.timezone),
+        dayLabel: dayLabel(drink.drunkAt, now, trip.startDate, trip.timezone),
+        sortAt: drink.drunkAt,
+      })),
+      ...achievementRows
+        .filter(
+          ({ unlock }) =>
+            query.data.filter === 'everyone' || unlock.userId === request.auth!.userId,
+        )
+        .map(({ unlock, memberName }) => ({
+          kind: 'achievement' as const,
+          unlock,
+          memberName,
+          tripDay: dayIndex(unlock.unlockedAt, trip.startDate, trip.timezone),
+          dayLabel: dayLabel(unlock.unlockedAt, now, trip.startDate, trip.timezone),
+          sortAt: unlock.unlockedAt,
+        })),
+    ]
+      .sort((left, right) => right.sortAt - left.sortAt)
+      .map((entry) => {
+        const item: Omit<typeof entry, 'sortAt'> & { sortAt?: number } = { ...entry };
+        delete item.sortAt;
+        return item;
+      });
     return page(items, offset, query.data.limit);
   });
 
   app.get('/api/v1/trips/:tripId/dashboard', async (request, reply) => {
     const trip = await requireTripMember(service, request, reply);
     if (!trip) return;
-    const [leaderboardRows, feedRows] = await Promise.all([
+    const [leaderboardRows, feedRows, recentAchievements] = await Promise.all([
       service.getLeaderboardRows(trip.id),
       service.getFeedDrinks(trip.id, undefined, 1_000_000),
+      service.listRecentAchievementUnlocks(trip.id, 5),
     ]);
     const own = leaderboardRows.find((row) => row.userId === request.auth!.userId);
     const length = tripLengthDays(trip.startDate, trip.endDate);
@@ -237,7 +266,7 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
       byCategory: [...categories.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([category, std]) => ({ category, std: rounded(std) })),
-      recentAchievements: [],
+      recentAchievements,
     };
   });
 

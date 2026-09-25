@@ -172,7 +172,7 @@ describe('M5 read APIs', () => {
           values: null,
         },
       ],
-      recentAchievements: [],
+      recentAchievements: [{ key: 'first_blood' }, { key: 'first_blood' }],
     });
 
     db.raw
@@ -219,10 +219,9 @@ describe('M5 read APIs', () => {
     }>();
     expect(firstPage.items).toHaveLength(1);
     expect(firstPage.items[0]).toMatchObject({
-      kind: 'drink',
+      kind: 'achievement',
       tripDay: 1,
     });
-    expect(typeof firstPage.items[0]!.drink.stdDrinks).toBe('number');
     expect(typeof firstPage.nextCursor).toBe('string');
     const secondFeedPage = await app.inject({
       method: 'GET',
@@ -231,7 +230,7 @@ describe('M5 read APIs', () => {
     });
     const secondPage = secondFeedPage.json<{ items: unknown[]; nextCursor: string | null }>();
     expect(secondPage.items).toHaveLength(1);
-    expect(secondPage.nextCursor).toBeNull();
+    expect(typeof secondPage.nextCursor).toBe('string');
 
     const mine = await app.inject({
       method: 'GET',
@@ -240,8 +239,11 @@ describe('M5 read APIs', () => {
     });
     expect(
       mine
-        .json<{ items: Array<{ drink: { drinkName: string } }> }>()
-        .items.map((item) => item.drink.drinkName),
+        .json<{
+          items: Array<{ kind: string; drink?: { drinkName: string } }>;
+        }>()
+        .items.filter((item) => item.kind === 'drink')
+        .map((item) => item.drink!.drinkName),
     ).toEqual(['Member Lager']);
 
     const dashboard = await app.inject({
@@ -266,7 +268,7 @@ describe('M5 read APIs', () => {
       { category: 'beer', std: dashboardBody.byCategory[0]!.std },
     ]);
     expect(typeof dashboardBody.byCategory[0]!.std).toBe('number');
-    expect(dashboardBody.recentAchievements).toEqual([]);
+    expect(dashboardBody.recentAchievements).toHaveLength(2);
 
     const ratings = await app.inject({
       method: 'GET',
