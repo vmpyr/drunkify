@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { stdDrinks } from '@drunkify/shared';
 
 import type { Config } from '../config.js';
+import { eventBus as defaultEventBus, type EventBus, tripChannel } from '../realtime/eventBus.js';
 import {
   DRINK_CATEGORIES,
   M2Service,
@@ -170,9 +171,10 @@ async function overpassCandidate(
 
 export function registerM4Routes(
   app: FastifyInstance,
-  options: { config: Config; db: DatabaseContext },
+  options: { config: Config; db: DatabaseContext; eventBus?: EventBus },
 ): void {
   const service = new M2Service(options.db);
+  const eventBus = options.eventBus ?? defaultEventBus;
 
   app.post('/api/v1/trips/:tripId/drinks', async (request, reply) => {
     if (!requireSession(request, reply)) return;
@@ -184,16 +186,21 @@ export function registerM4Routes(
     if (!parameters.success || !body.success) {
       return sendError(reply, 422, 'validation_failed', 'Validation failed');
     }
-    return renderResult(
-      reply,
-      await service.createDrink({
-        id: body.data.id,
-        tripId: parameters.data.tripId,
-        userId: request.auth!.userId,
-        drink: toInput({ ...body.data, rating: undefined }),
-        now: Date.now(),
-      }),
-    );
+    const result = await service.createDrink({
+      id: body.data.id,
+      tripId: parameters.data.tripId,
+      userId: request.auth!.userId,
+      drink: toInput({ ...body.data, rating: undefined }),
+      now: Date.now(),
+    });
+    const drink = result.body.drink as DrinkRecord | undefined;
+    if (result.applied && drink) {
+      eventBus.publish(tripChannel(parameters.data.tripId), {
+        type: 'drink.created',
+        payload: toDrink(drink),
+      });
+    }
+    return renderResult(reply, result);
   });
 
   app.put('/api/v1/trips/:tripId/drinks/:drinkId', async (request, reply) => {
@@ -205,16 +212,21 @@ export function registerM4Routes(
     if (!parameters.success || !body.success) {
       return sendError(reply, 422, 'validation_failed', 'Validation failed');
     }
-    return renderResult(
-      reply,
-      await service.updateDrink({
-        id: parameters.data.drinkId,
-        tripId: parameters.data.tripId,
-        userId: request.auth!.userId,
-        drink: toInput(body.data),
-        now: Date.now(),
-      }),
-    );
+    const result = await service.updateDrink({
+      id: parameters.data.drinkId,
+      tripId: parameters.data.tripId,
+      userId: request.auth!.userId,
+      drink: toInput(body.data),
+      now: Date.now(),
+    });
+    const drink = result.body.drink as DrinkRecord | undefined;
+    if (result.applied && drink) {
+      eventBus.publish(tripChannel(parameters.data.tripId), {
+        type: 'drink.updated',
+        payload: toDrink(drink),
+      });
+    }
+    return renderResult(reply, result);
   });
 
   app.patch('/api/v1/trips/:tripId/drinks/:drinkId/rating', async (request, reply) => {
@@ -226,16 +238,21 @@ export function registerM4Routes(
     if (!parameters.success || !body.success) {
       return sendError(reply, 422, 'validation_failed', 'Validation failed');
     }
-    return renderResult(
-      reply,
-      await service.rateDrink({
-        id: parameters.data.drinkId,
-        tripId: parameters.data.tripId,
-        userId: request.auth!.userId,
-        rating: body.data.rating,
-        now: Date.now(),
-      }),
-    );
+    const result = await service.rateDrink({
+      id: parameters.data.drinkId,
+      tripId: parameters.data.tripId,
+      userId: request.auth!.userId,
+      rating: body.data.rating,
+      now: Date.now(),
+    });
+    const drink = result.body.drink as DrinkRecord | undefined;
+    if (result.applied && drink) {
+      eventBus.publish(tripChannel(parameters.data.tripId), {
+        type: 'drink.updated',
+        payload: toDrink(drink),
+      });
+    }
+    return renderResult(reply, result);
   });
 
   app.delete('/api/v1/trips/:tripId/drinks/:drinkId', async (request, reply) => {
@@ -246,15 +263,19 @@ export function registerM4Routes(
     if (!parameters.success) {
       return sendError(reply, 404, 'not_found', 'Drink not found');
     }
-    return renderResult(
-      reply,
-      await service.deleteDrink({
-        id: parameters.data.drinkId,
-        tripId: parameters.data.tripId,
-        userId: request.auth!.userId,
-        now: Date.now(),
-      }),
-    );
+    const result = await service.deleteDrink({
+      id: parameters.data.drinkId,
+      tripId: parameters.data.tripId,
+      userId: request.auth!.userId,
+      now: Date.now(),
+    });
+    if (result.applied) {
+      eventBus.publish(tripChannel(parameters.data.tripId), {
+        type: 'drink.deleted',
+        payload: { id: parameters.data.drinkId },
+      });
+    }
+    return renderResult(reply, result);
   });
 
   app.post('/api/v1/trips/:tripId/drinks/sync', async (request, reply) => {
@@ -324,6 +345,17 @@ export function registerM4Routes(
         now: Date.now(),
       });
       const drink = mutation.body.drink as DrinkRecord | undefined;
+      if (mutation.applied && mutation.statusCode >= 200 && mutation.statusCode < 300) {
+        eventBus.publish(tripChannel(op.tripId), {
+          type:
+            op.type === 'create'
+              ? 'drink.created'
+              : op.type === 'delete'
+                ? 'drink.deleted'
+                : 'drink.updated',
+          payload: op.type === 'delete' ? { id: op.drinkId } : toDrink(drink!),
+        });
+      }
       results.push(
         mutation.statusCode >= 200 && mutation.statusCode < 300
           ? {

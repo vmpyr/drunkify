@@ -2,6 +2,8 @@ import type BetterSqlite3 from 'better-sqlite3';
 import type pg from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
+import { pendingTransitions, stdDrinks } from '@drunkify/shared';
+
 import type { DatabaseContext } from './createDb.js';
 
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -155,6 +157,29 @@ export interface FavouriteRecord {
 export interface DrinkMutationResult {
   statusCode: number;
   body: Record<string, unknown>;
+  applied?: boolean;
+}
+
+export interface LeaderboardRow {
+  userId: string;
+  name: string;
+  joinedAt: number;
+  std: number;
+  drinks: number;
+  k: number;
+  a: number;
+  d: number;
+  rating: number;
+}
+
+export interface FeedDrink {
+  drink: DrinkRecord;
+  memberName: string;
+}
+
+export interface PhaseTransitionClaim {
+  tripId: string;
+  phase: 'final_24h' | 'wrapped_unlocked';
 }
 
 export type TokenFailure = 'invalid' | 'expired' | 'used' | 'revoked';
@@ -1115,7 +1140,7 @@ export class M2Store {
     const existing = await this.#findDrink(tx, input.id);
     if (existing) {
       if (existing.tripId === input.tripId && existing.userId === input.userId) {
-        return { statusCode: 200, body: { drink: existing } };
+        return { statusCode: 200, body: { drink: existing }, applied: false };
       }
       return {
         statusCode: 409,
@@ -1164,6 +1189,7 @@ export class M2Store {
     return {
       statusCode: 201,
       body: { drink: (await this.#findDrink(tx, input.id))! },
+      applied: true,
     };
   }
 
@@ -1226,7 +1252,11 @@ export class M2Store {
       'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
       [input.now, input.tripId],
     );
-    return { statusCode: 200, body: { drink: (await this.#findDrink(tx, input.id))! } };
+    return {
+      statusCode: 200,
+      body: { drink: (await this.#findDrink(tx, input.id))! },
+      applied: true,
+    };
   }
 
   async #rateDrink(
@@ -1263,7 +1293,11 @@ export class M2Store {
       'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
       [input.now, input.tripId],
     );
-    return { statusCode: 200, body: { drink: (await this.#findDrink(tx, input.id))! } };
+    return {
+      statusCode: 200,
+      body: { drink: (await this.#findDrink(tx, input.id))! },
+      applied: true,
+    };
   }
 
   async #deleteDrink(
@@ -1290,7 +1324,7 @@ export class M2Store {
       'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
       [input.now, input.tripId],
     );
-    return { statusCode: 204, body: {} };
+    return { statusCode: 204, body: {}, applied: true };
   }
 
   createDrink(input: {
@@ -1351,7 +1385,7 @@ export class M2Store {
           typeof stored.response === 'string'
             ? (JSON.parse(stored.response) as Record<string, unknown>)
             : (stored.response as Record<string, unknown>);
-        return { statusCode: Number(stored.status_code), body: response };
+        return { statusCode: Number(stored.status_code), body: response, applied: false };
       }
       let result: DrinkMutationResult;
       if (input.clientOpId === input.drinkId) {
@@ -1421,7 +1455,7 @@ export class M2Store {
           input.now,
         ],
       );
-      return result;
+      return { ...result, applied: true };
     });
   }
 
@@ -1592,6 +1626,160 @@ export class M2Store {
         venueId,
       ]),
     );
+  }
+
+  async getLeaderboardRows(tripId: string): Promise<LeaderboardRow[]> {
+    const members = await this.#adapter.all<Record<string, unknown>>(
+      `select tm.user_id, tm.joined_at, u.display_name
+       from trip_members tm
+       join users u on u.id = tm.user_id
+       where tm.trip_id = ?`,
+      [tripId],
+    );
+    const drinkRows = await this.#adapter.all<Record<string, unknown>>(
+      'select * from drinks where trip_id = ?',
+      [tripId],
+    );
+    const drinks = drinkRows
+      .map(normalizeDrink)
+      .filter((drink): drink is DrinkRecord => drink !== null);
+    const intermediate = members.map((member) => {
+      const own = drinks.filter((drink) => drink.userId === member.user_id);
+      const std =
+        Math.round(
+          own.reduce((total, drink) => total + stdDrinks(drink.sizeMl, drink.abv, drink.qty), 0) *
+            10,
+        ) / 10;
+      const a = own.reduce(
+        (total, drink) =>
+          total +
+          (drinks.some(
+            (other) =>
+              other.userId !== drink.userId && Math.abs(other.drunkAt - drink.drunkAt) <= 60_000,
+          )
+            ? drink.qty
+            : 0),
+        0,
+      );
+      const d = own.reduce(
+        (total, drink) => total + (drink.category === 'soft' ? drink.qty : 0),
+        0,
+      );
+      return {
+        userId: String(member.user_id),
+        name: String(member.display_name),
+        joinedAt: Number(member.joined_at),
+        std,
+        drinks: own.reduce((total, drink) => total + drink.qty, 0),
+        k: std,
+        a,
+        d,
+        unique: new Set(own.map((drink) => `${drink.category}\u0000${drink.drinkName}`)).size,
+      };
+    });
+    const zScore = (value: number, values: number[]) => {
+      const mean = values.reduce((total, item) => total + item, 0) / Math.max(values.length, 1);
+      const variance =
+        values.reduce((total, item) => total + (item - mean) ** 2, 0) / Math.max(values.length, 1);
+      return (value - mean) / Math.max(Math.sqrt(variance), 1e-9);
+    };
+    const ks = intermediate.map((row) => row.k);
+    const as = intermediate.map((row) => row.a);
+    const ds = intermediate.map((row) => row.d);
+    const uniques = intermediate.map((row) => row.unique);
+    return intermediate.map(({ unique, ...row }) => ({
+      ...row,
+      rating:
+        Math.round(
+          Math.min(
+            3,
+            Math.max(
+              0,
+              1 +
+                0.5 * zScore(row.k, ks) +
+                0.3 * zScore(row.a, as) -
+                0.2 * zScore(row.d, ds) +
+                0.1 * zScore(unique, uniques),
+            ),
+          ) * 100,
+        ) / 100,
+    }));
+  }
+
+  async getFeedDrinks(tripId: string, userId?: string, limit = 50): Promise<FeedDrink[]> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select d.*, u.display_name as member_name
+       from drinks d
+       join users u on u.id = d.user_id
+       where d.trip_id = ? ${userId ? 'and d.user_id = ?' : ''}
+       order by d.drunk_at desc, d.created_at desc
+       limit ?`,
+      userId ? [tripId, userId, limit] : [tripId, limit],
+    );
+    return rows
+      .map((row) => {
+        const drink = normalizeDrink(row);
+        return drink ? { drink, memberName: String(row.member_name) } : null;
+      })
+      .filter((item): item is FeedDrink => item !== null);
+  }
+
+  async getRatings(tripId: string, userId: string, limit = 50) {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select id, drink_name, category, rating, drunk_at
+       from drinks
+       where trip_id = ? and user_id = ? and rating is not null
+       order by drunk_at desc limit ?`,
+      [tripId, userId, limit],
+    );
+    return rows.map((row) => ({
+      drinkId: String(row.id),
+      drinkName: String(row.drink_name),
+      category: row.category as DrinkCategory,
+      rating: Number(row.rating),
+      drunkAt: Number(row.drunk_at),
+    }));
+  }
+
+  async claimPhaseTransitions(now: number): Promise<PhaseTransitionClaim[]> {
+    const trips = await this.#adapter.all<Record<string, unknown>>(
+      `select id, unlock_at, final24h_marked_at, wrapped_unlocked_marked_at
+       from trips where ceremony_started_at is null`,
+    );
+    const claimed: PhaseTransitionClaim[] = [];
+    for (const trip of trips) {
+      const tripId = String(trip.id);
+      const unlockAt = Number(trip.unlock_at);
+      const transitions = pendingTransitions(
+        {
+          unlockAt,
+          final24hMarkedAt:
+            trip.final24h_marked_at === null ? null : Number(trip.final24h_marked_at),
+          wrappedUnlockedMarkedAt:
+            trip.wrapped_unlocked_marked_at === null
+              ? null
+              : Number(trip.wrapped_unlocked_marked_at),
+        },
+        now,
+      );
+      if (transitions.includes('final_24h')) {
+        const result = await this.#adapter.run(
+          `update trips set final24h_marked_at = ?
+           where id = ? and final24h_marked_at is null`,
+          [now, tripId],
+        );
+        if (result.changes === 1) claimed.push({ tripId, phase: 'final_24h' });
+      }
+      if (transitions.includes('wrapped_unlocked')) {
+        const result = await this.#adapter.run(
+          `update trips set wrapped_unlocked_marked_at = ?
+           where id = ? and wrapped_unlocked_marked_at is null`,
+          [now, tripId],
+        );
+        if (result.changes === 1) claimed.push({ tripId, phase: 'wrapped_unlocked' });
+      }
+    }
+    return claimed;
   }
 }
 

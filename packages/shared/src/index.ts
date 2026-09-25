@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export { computePhase, pendingTransitions } from './phase.js';
+export type { PhaseTransition, TripPhase } from './phase.js';
+export { rankMembers } from './rank.js';
+export type { MemberRankInput, RankedMember } from './rank.js';
+export { dayIndex, dayLabel, tripLengthDays } from './tripDays.js';
+
 export {
   abvToPos,
   clampAbv,

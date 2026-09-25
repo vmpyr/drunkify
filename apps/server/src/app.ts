@@ -14,11 +14,17 @@ import { SCHEMA_VERSION, type DatabaseContext } from './db/createDb.js';
 import { registerM2Routes } from './routes/m2.js';
 import { registerM3Routes } from './routes/m3.js';
 import { registerM4Routes } from './routes/m4.js';
+import { registerM5Routes } from './routes/m5.js';
+import { eventBus as defaultEventBus } from './realtime/eventBus.js';
+import type { EventBus } from './realtime/eventBus.js';
+import { registerRealtimeRoutes } from './realtime/sse.js';
 
 export interface AppOptions {
   config: Config;
   db: DatabaseContext;
   startedAt?: number;
+  eventBus?: EventBus;
+  sseHeartbeatIntervalMs?: number;
 }
 
 export async function createApp(options: AppOptions): Promise<FastifyInstance> {
@@ -57,6 +63,12 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   registerM2Routes(app, options);
   registerM3Routes(app, options);
   registerM4Routes(app, options);
+  registerM5Routes(app, options);
+  registerRealtimeRoutes(app, {
+    db: options.db,
+    eventBus: options.eventBus ?? defaultEventBus,
+    heartbeatIntervalMs: options.sseHeartbeatIntervalMs,
+  });
 
   app.get('/healthz', () => healthResponseSchema.parse({ status: 'ok' }));
   app.get('/readyz', async (_request, reply) => {
