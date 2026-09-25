@@ -74,6 +74,7 @@ export default defineConfig({
     }),
   ],
   server: {
+    allowedHosts: ['devpod-mumbai.uberinternal.com'],
     proxy: {
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
       '/healthz': { target: 'http://localhost:3000', changeOrigin: true },
