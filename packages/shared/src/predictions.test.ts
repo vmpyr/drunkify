@@ -74,7 +74,7 @@ describe('computePredictionWindow', () => {
 });
 
 describe('predictionDefaults', () => {
-  it('prefills five standard drinks per trip day and scales the squad total once', () => {
-    expect(predictionDefaults(10, 6)).toEqual({ q1: 50, q2: 300 });
+  it('prefills two litres per trip day and scales the squad total once', () => {
+    expect(predictionDefaults(10, 6)).toEqual({ q1: 20, q2: 120 });
   });
 });

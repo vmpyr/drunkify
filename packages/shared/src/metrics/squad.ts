@@ -76,6 +76,7 @@ export interface RankedRow {
 }
 
 export interface MainBoardRow extends RankedRow {
+  litres: number;
   std: number;
   drinks: number;
   k: number;
@@ -650,21 +651,22 @@ export function scorePredictions(
   members: readonly MemberMetrics[],
   allDrinks: readonly DerivedDrink[],
 ): OracleScore[] {
-  const groupStd = members.reduce((sum, member) => sum + member.stdDrinks, 0);
+  // q1/q2 answers are litres; the field names predate the switch from std drinks.
+  const groupLitres = members.reduce((sum, member) => sum + member.litres, 0);
   const topMember = actualTopMember(members);
   const leastMember = actualLeastMember(members);
   const topDrink = topDrinks(allDrinks, 1)[0] ?? null;
   return predictions
     .map((prediction) => {
       const member = members.find((row) => row.userId === prediction.userId);
-      const actualSelf = member?.stdDrinks ?? 0;
+      const actualSelf = member?.litres ?? 0;
       const q1Err = Math.min(
         1,
         Math.abs(prediction.myTotalStd - actualSelf) / Math.max(actualSelf, 1),
       );
       const q2Err = Math.min(
         1,
-        Math.abs(prediction.groupTotalStd - groupStd) / Math.max(groupStd, 1),
+        Math.abs(prediction.groupTotalStd - groupLitres) / Math.max(groupLitres, 1),
       );
       const q3Err = prediction.topMemberId === topMember?.userId ? 0 : 1;
       const q4Err = prediction.leastMemberId === leastMember?.userId ? 0 : 1;
@@ -981,10 +983,7 @@ export function buildSquadWrapped(
     .map((prediction) => ({
       userId: prediction.userId,
       predicted: prediction.myTotalStd,
-      actual: round(
-        metrics.find((member) => member.userId === prediction.userId)?.stdDrinks ?? 0,
-        1,
-      ),
+      actual: round(metrics.find((member) => member.userId === prediction.userId)?.litres ?? 0, 1),
     }))
     .sort((left, right) => left.userId.localeCompare(right.userId));
   const winners = allocateAwards(metrics, oracleScores);
@@ -1013,7 +1012,7 @@ export function buildSquadWrapped(
   const ranking = rankMembers(
     metrics.map((member) => ({
       userId: member.userId,
-      value: member.stdDrinks,
+      value: member.litres,
       qty: member.drinkCount,
       joinedAt: member.joinedAt,
     })),
@@ -1023,8 +1022,9 @@ export function buildSquadWrapped(
       return {
         userId: row.userId,
         rank: row.rank,
-        value: row.value,
-        std: row.value,
+        value: round(row.value, 2),
+        litres: round(row.value, 2),
+        std: round(metrics.find((member) => member.userId === row.userId)!.stdDrinks, 1),
         drinks: row.qty,
         k: round(values.kPerDay, 2),
         a: round(values.aPerDay, 2),
@@ -1040,6 +1040,7 @@ export function buildSquadWrapped(
 
   const card01 = makeCard('01_group_total', {
     groupStd: round(totals.stdDrinks, 1),
+    groupLitres: round(totals.litres, 2),
     absurdValue: absurd?.value ?? 0,
     absurdUnitPhrase: absurd?.key ?? 'empty',
   });

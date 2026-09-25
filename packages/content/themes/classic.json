@@ -11,11 +11,11 @@
   },
   "leaderboard": {
     "title": "The Tab",
-    "subtitle": "Day {day} of {days}. Ranked by standard drinks.",
+    "subtitle": "Day {day} of {days}.",
     "columns": [
       {
-        "key": "std",
-        "label": "Std drinks",
+        "key": "litres",
+        "label": "Litres",
         "primary": true
       },
       {
@@ -36,9 +36,9 @@
   },
   "home": {
     "totalsYou": "You, this trip",
-    "totalsYouSub": "std drinks from {drinks} drinks",
+    "totalsYouSub": "litres from {drinks} drinks",
     "totalsSquad": "Squad",
-    "totalsSquadSub": "std from {drinks}",
+    "totalsSquadSub": "L from {drinks}",
     "emptyYouSub": "No drinks yet",
     "emptySquadSub": "Nobody’s started",
     "again": "Another {drink}",
@@ -54,7 +54,7 @@
     "stepSize": "How big?",
     "customSize": "Custom",
     "customSizeSub": "Enter ml",
-    "stdUnit": "standard drinks",
+    "stdUnit": "litres",
     "venueNearestHint": "Nearest place, 40 m away",
     "noVenue": "No venue",
     "now": "Now",
@@ -106,9 +106,9 @@
     "emptyCardBody": "Five quick guesses about the trip. They lock at your first drink or in {hours} hours, and stay hidden until the ceremony.",
     "emptyCardCta": "Make predictions",
     "q1": "Your total",
-    "q1Unit": "std drinks",
+    "q1Unit": "litres",
     "q2": "The squad’s total",
-    "q2Unit": "std drinks",
+    "q2Unit": "litres",
     "q3": "Tops the Tab",
     "q4": "Drinks the least",
     "q5": "Most-ordered drink",
@@ -231,7 +231,7 @@
       "name": "Oracle"
     },
     "night_mvp": {
-      "criterion": "Most std drinks in a single day (one per day, shown in the replay)",
+      "criterion": "Most litres in a single day (one per day, shown in the replay)",
       "name": "Night MVP"
     }
   },
@@ -239,7 +239,7 @@
     "metronome": {
       "behaviour": "Steady pace, little day-to-day change",
       "name": "The Metronome",
-      "writeup": "{perDay} drinks a day, give or take a sip, for {days} days straight. You never led the Tab and never left it. Your moon is in a pint glass; your rising sign is last orders."
+      "writeup": "{perDay} litres a day, give or take a sip, for {days} days straight. You never led the Tab and never left it. Your moon is in a pint glass; your rising sign is last orders."
     },
     "chaos": {
       "behaviour": "Wild swings, late shots",
@@ -368,7 +368,7 @@
       },
       "02_absurd_units": {
         "real": "{litres} litres.",
-        "realSub": "{ukPints} UK pints. {std} std drinks.",
+        "realSub": "{ukPints} UK pints.",
         "lead": "Or, if you prefer,",
         "absurdValue": "{absurdValue}",
         "absurdUnit": "{absurdUnitPhrase}.",
@@ -435,17 +435,18 @@
       },
       "12_prediction_vs_reality": {
         "lead": "On day one you said",
-        "predicted": "{predicted} std drinks.",
+        "predicted": "{predicted} litres.",
         "actualLead": "Reality said",
         "actual": "{actual}.",
         "noteOver": "Confident. Wrong, but confident.",
-        "noteUnder": "You underestimated yourself. Rare."
+        "noteUnder": "You underestimated yourself. Rare.",
+        "noteSpot": "Spot on. Suspiciously spot on."
       },
       "13_rank": {
         "lead": "Your rank.",
         "drumroll": "Drumroll.",
         "rank": "{rank}",
-        "note": "{perDay} std drinks a day."
+        "note": "{perDay} litres a day."
       },
       "14_archetype": {
         "lead": "You are",
@@ -456,7 +457,7 @@
         "share": "Share",
         "replay": "Watch again",
         "waiting": "Waiting for the ceremony…",
-        "noPartner": "{archetype}. {perDay} a day for {days} days, {ratings} ratings, {unique} drinks tried, {softShare}% soft, {topDrink} on repeat ({topCount} times), {afterMidnight}% after midnight, {venues} venues, {cheers} cheers. No drinking partner this trip — you did this one alone, and it shows."
+        "noPartner": "{archetype}. {perDay} L a day for {days} days, {ratings} ratings, {unique} drinks tried, {softShare}% soft, {topDrink} on repeat ({topCount} times), {afterMidnight}% after midnight, {venues} venues, {cheers} cheers. No drinking partner this trip — you did this one alone, and it shows."
       }
     }
   },
@@ -478,8 +479,8 @@
     "cards": {
       "01_group_total": {
         "lead": "Together, you drank",
-        "value": "{groupStd}",
-        "unit": "standard drinks.",
+        "value": "{groupLitres}",
+        "unit": "litres.",
         "absurd": "Or {absurdValue} {absurdUnitPhrase}."
       },
       "02_drunk_o_meter": {
@@ -525,7 +526,7 @@
       },
       "08_predictions": {
         "title": "Predictions",
-        "row": "{name} said {predicted}. Reality: {actual}.",
+        "row": "{name} said {predicted} L. Reality: {actual} L.",
         "oracle": "The Oracle: {name}",
         "empty": "Nobody predicted this time, so there’s no Oracle to crown."
       },

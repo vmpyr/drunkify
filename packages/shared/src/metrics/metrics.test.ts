@@ -102,7 +102,7 @@ describe('M8 hand-computed golden fixture', () => {
       share: 67,
       oneIn: 2,
     });
-    expect(first.cards[11]?.vars).toEqual({ predicted: 5, actual: 4 });
+    expect(first.cards[11]?.vars).toEqual({ predicted: 5, actual: 1.2 });
   });
 });
 
@@ -114,6 +114,6 @@ describe('M8 zero-drink personal Wrapped matrix', () => {
     expect(payload.cards.map((card) => card?.key ?? null)).toEqual(expectedZeroCardMatrix);
     expect(JSON.stringify(payload)).not.toMatch(/NaN|Infinity/);
     expect(payload.cards[0]?.vars).toEqual({ totalDrinks: 0, days: 3 });
-    expect(payload.cards[12]?.vars).toEqual({ perDay: 0 });
+    expect(payload.cards[12]?.vars).toEqual({ perDay: 0, stdPerDay: 0 });
   });
 });

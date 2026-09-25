@@ -5,6 +5,7 @@ import {
   computePhase,
   dayIndex,
   dayLabel,
+  litres,
   rankMembers,
   stdDrinks,
   tripLengthDays,
@@ -85,6 +86,10 @@ function rounded(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+function roundedLitres(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function toDrink(drink: DrinkRecord) {
   return {
     id: drink.id,
@@ -155,7 +160,7 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
     const ranked = rankMembers(
       source.map((row) => ({
         ...row,
-        value: row.std,
+        value: row.litres,
         qty: row.drinks,
       })),
     );
@@ -168,6 +173,7 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
         rank: row.rank,
         values: {
           std: row.std,
+          litres: row.litres,
           drinks: row.drinks,
           k: row.k,
           a: row.a,
@@ -243,29 +249,45 @@ export function registerM5Routes(app: FastifyInstance, options: { db: DatabaseCo
       day: index + 1,
       dateLabel: dashboardDateLabel(trip.startDate, index + 1),
       std: 0,
+      litres: 0,
     }));
-    const categories = new Map<string, number>();
+    const categories = new Map<string, { std: number; litres: number }>();
     for (const { drink } of feedRows) {
       const std = stdDrinks(drink.sizeMl, drink.abv, drink.qty);
+      const volume = litres(drink.sizeMl, drink.qty);
       const bucket = Math.min(
         length,
         Math.max(1, dayIndex(drink.drunkAt, trip.startDate, trip.timezone)),
       );
       days[bucket - 1]!.std += std;
-      categories.set(drink.category, (categories.get(drink.category) ?? 0) + std);
+      days[bucket - 1]!.litres += volume;
+      const category = categories.get(drink.category) ?? { std: 0, litres: 0 };
+      categories.set(drink.category, {
+        std: category.std + std,
+        litres: category.litres + volume,
+      });
     }
     return {
       totals: {
-        you: { std: own?.std ?? 0, drinks: own?.drinks ?? 0 },
+        you: { std: own?.std ?? 0, litres: own?.litres ?? 0, drinks: own?.drinks ?? 0 },
         squad: {
           std: rounded(leaderboardRows.reduce((total, row) => total + row.std, 0)),
+          litres: roundedLitres(leaderboardRows.reduce((total, row) => total + row.litres, 0)),
           drinks: leaderboardRows.reduce((total, row) => total + row.drinks, 0),
         },
       },
-      byDay: days.map((item) => ({ ...item, std: rounded(item.std) })),
+      byDay: days.map((item) => ({
+        ...item,
+        std: rounded(item.std),
+        litres: roundedLitres(item.litres),
+      })),
       byCategory: [...categories.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([category, std]) => ({ category, std: rounded(std) })),
+        .map(([category, totals]) => ({
+          category,
+          std: rounded(totals.std),
+          litres: roundedLitres(totals.litres),
+        })),
       recentAchievements,
     };
   });

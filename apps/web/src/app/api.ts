@@ -3,6 +3,7 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message);
   }
@@ -27,12 +28,13 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
+      error?: { code?: string; message?: string } & Record<string, unknown>;
     } | null;
     throw new ApiError(
       body?.error?.message ?? `Request failed (${response.status})`,
       response.status,
       body?.error?.code,
+      body?.error ?? {},
     );
   }
   if (response.status === 204) return undefined as T;

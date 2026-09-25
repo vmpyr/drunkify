@@ -30,6 +30,16 @@ export function formatStd(std: number): string {
   return roundHalfUp(std, 1).toFixed(1);
 }
 
+/** Liquid volume drunk, in litres (not pure alcohol). */
+export function litres(sizeMl: number, qty: number): number {
+  return (sizeMl * qty) / 1000;
+}
+
+/** Two decimals under 10 L (0.85), one from 10 L up (12.4). */
+export function formatLitres(value: number): string {
+  return value < 10 ? roundHalfUp(value, 2).toFixed(2) : roundHalfUp(value, 1).toFixed(1);
+}
+
 export function formatEthanolGrams(grams: number): string {
   return roundHalfUp(grams, 0).toFixed(0);
 }

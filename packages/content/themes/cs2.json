@@ -11,12 +11,12 @@
   },
   "leaderboard": {
     "title": "Scoreboard",
-    "subtitle": "Day {day} of {days}. Sorted by K.",
+    "subtitle": "Day {day} of {days}.",
     "columns": [
       {
         "key": "k",
         "label": "K",
-        "meaning": "Std drinks (rounded)",
+        "meaning": "Litres",
         "primary": true
       },
       {
@@ -47,9 +47,9 @@
   },
   "home": {
     "totalsYou": "You, this trip",
-    "totalsYouSub": "std drinks from {drinks} drinks",
+    "totalsYouSub": "litres from {drinks} drinks",
     "totalsSquad": "Squad",
-    "totalsSquadSub": "std from {drinks}",
+    "totalsSquadSub": "L from {drinks}",
     "emptyYouSub": "No frags yet",
     "emptySquadSub": "Warmup",
     "again": "Another {drink}",
@@ -65,7 +65,7 @@
     "stepSize": "How big?",
     "customSize": "Custom",
     "customSizeSub": "Enter ml",
-    "stdUnit": "standard drinks",
+    "stdUnit": "litres",
     "venueNearestHint": "Nearest place, 40 m away",
     "noVenue": "No venue",
     "now": "Now",
@@ -117,9 +117,9 @@
     "emptyCardBody": "Five calls before round one. They lock at your first drink or in {hours} hours, and stay sealed until the grand final.",
     "emptyCardCta": "Make my picks",
     "q1": "Your total",
-    "q1Unit": "std drinks",
+    "q1Unit": "litres",
     "q2": "The squad’s total",
-    "q2Unit": "std drinks",
+    "q2Unit": "litres",
     "q3": "Top frag",
     "q4": "Bottom frag",
     "q5": "Most-picked drink",
@@ -242,7 +242,7 @@
       "name": "Pick’em Champion"
     },
     "night_mvp": {
-      "criterion": "Most std drinks in a single day (one per day, shown in the replay)",
+      "criterion": "Most litres in a single day (one per day, shown in the replay)",
       "name": "Map MVP"
     }
   },
@@ -250,7 +250,7 @@
     "metronome": {
       "behaviour": "Steady pace, little day-to-day change",
       "name": "Anchor",
-      "writeup": "{perDay} a day, every day, {days} days straight. Never top-fragged, never benched. You held the site while everyone else peeked."
+      "writeup": "{perDay} L a day, every day, {days} days straight. Never top-fragged, never benched. You held the site while everyone else peeked."
     },
     "chaos": {
       "behaviour": "Wild swings, late shots",
@@ -411,7 +411,7 @@
       },
       "02_absurd_units": {
         "real": "{litres} litres.",
-        "realSub": "{ukPints} UK pints. {std} std drinks.",
+        "realSub": "{ukPints} UK pints.",
         "lead": "Converted to utility,",
         "absurdValue": "{absurdValue}",
         "absurdUnit": "{absurdUnitPhrase}. Full buy.",
@@ -478,17 +478,18 @@
       },
       "12_prediction_vs_reality": {
         "lead": "Your pick’em said",
-        "predicted": "{predicted} std drinks.",
+        "predicted": "{predicted} litres.",
         "actualLead": "The server said",
         "actual": "{actual}.",
         "noteOver": "Bold call. Wrong call.",
-        "noteUnder": "Underrated yourself. Classic sandbagging."
+        "noteUnder": "Underrated yourself. Classic sandbagging.",
+        "noteSpot": "Called it. Pro read."
       },
       "13_rank": {
         "lead": "Your rank.",
         "drumroll": "Loading…",
         "rank": "{rank}",
-        "note": "{perDay} std drinks a day."
+        "note": "{perDay} litres a day."
       },
       "14_archetype": {
         "lead": "Your role",
@@ -499,7 +500,7 @@
         "share": "Share",
         "replay": "Watch again",
         "waiting": "Waiting for the grand final…",
-        "noPartner": "{archetype}. {perDay} a day for {days} days, {ratings} ratings, {unique} drinks in the pool, {softShare}% soft, {topDrink} on repeat ({topCount} buys), {afterMidnight}% after midnight, {venues} maps, {cheers} trades. No duo partner this run — a true solo queue."
+        "noPartner": "{archetype}. {perDay} L a day for {days} days, {ratings} ratings, {unique} drinks in the pool, {softShare}% soft, {topDrink} on repeat ({topCount} buys), {afterMidnight}% after midnight, {venues} maps, {cheers} trades. No duo partner this run — a true solo queue."
       }
     }
   },
@@ -521,8 +522,8 @@
     "cards": {
       "01_group_total": {
         "lead": "Total squad damage",
-        "value": "{groupStd}",
-        "unit": "standard drinks.",
+        "value": "{groupLitres}",
+        "unit": "litres.",
         "absurd": "Or {absurdValue} {absurdUnitPhrase}."
       },
       "02_drunk_o_meter": {
@@ -568,7 +569,7 @@
       },
       "08_predictions": {
         "title": "Pick’em results",
-        "row": "{name} called {predicted}. Actual: {actual}.",
+        "row": "{name} called {predicted} L. Actual: {actual} L.",
         "oracle": "Pick’em Champion: {name}",
         "empty": "No Pick’em Champion this round — nobody locked in a pick."
       },

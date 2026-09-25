@@ -30,6 +30,7 @@ export function predictionDefaults(
   tripLengthDays: number,
   memberCount: number,
 ): { q1: number; q2: number } {
-  const q1 = 5 * tripLengthDays;
+  // Litres (liquid volume), whole numbers: about 2 L a person a day.
+  const q1 = 2 * tripLengthDays;
   return { q1, q2: q1 * memberCount };
 }

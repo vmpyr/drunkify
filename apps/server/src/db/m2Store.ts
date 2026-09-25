@@ -7,6 +7,7 @@ import {
   buildSquadWrapped,
   computePredictionWindow,
   evaluateAchievementPredicates,
+  litres,
   pendingTransitions,
   stdDrinks,
 } from '@drunkify/shared';
@@ -174,6 +175,7 @@ export interface LeaderboardRow {
   name: string;
   joinedAt: number;
   std: number;
+  litres: number;
   drinks: number;
   k: number;
   a: number;
@@ -2083,6 +2085,9 @@ export class M2Store {
           own.reduce((total, drink) => total + stdDrinks(drink.sizeMl, drink.abv, drink.qty), 0) *
             10,
         ) / 10;
+      const volume =
+        Math.round(own.reduce((total, drink) => total + litres(drink.sizeMl, drink.qty), 0) * 100) /
+        100;
       const a = own.reduce(
         (total, drink) =>
           total +
@@ -2103,8 +2108,9 @@ export class M2Store {
         name: String(member.display_name),
         joinedAt: Number(member.joined_at),
         std,
+        litres: volume,
         drinks: own.reduce((total, drink) => total + drink.qty, 0),
-        k: std,
+        k: volume,
         a,
         d,
         unique: new Set(own.map((drink) => `${drink.category}\u0000${drink.drinkName}`)).size,

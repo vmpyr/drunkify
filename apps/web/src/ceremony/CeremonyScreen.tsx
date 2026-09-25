@@ -1,464 +1,594 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { api, appUrl } from '../app/api.js';
+import { fmtL, memberColour, tp, tpMaybe } from '../app/content.js';
+import { queryClient, send, serverNow, v1 } from '../app/queries.js';
+import { Splash } from '../app/session.js';
+import { initial } from '../components/Avatar.js';
+import { toast } from '../components/overlayStore.js';
+import { formError } from '../screens/auth.js';
+import { TopBar, useTripCtx, type TripCtx } from '../trip/TripLayout.js';
 import {
   actionForKey,
-  cardTitle,
   clampReplayProgress,
-  displayValue,
   replayAtProgress,
   replayFromCard,
   type CeremonyAction,
   type CeremonyState,
-  type ReplayPayload,
   type SquadWrappedPayload,
   type WrappedCard,
 } from './model.js';
 
-interface CeremonyScreenProps {
-  tripId: string;
+function useCeremony(tripId: string, poll: boolean) {
+  const state = useQuery({
+    queryKey: ['trip', tripId, 'ceremony', 'state'],
+    queryFn: async () => (await v1<{ state: CeremonyState }>(`/trips/${tripId}/ceremony/state`)).state,
+    refetchInterval: poll ? 5000 : false,
+  });
+  const squad = useQuery({
+    queryKey: ['trip', tripId, 'wrapped', 'squad'],
+    queryFn: () => v1<{ unlocked: boolean; payload: SquadWrappedPayload | null }>(`/trips/${tripId}/wrapped/squad`),
+    enabled: state.data?.status === 'running' || state.data?.status === 'ended',
+    staleTime: Infinity,
+  });
+  return { state, squad };
 }
 
-interface CeremonyResponse {
-  state: CeremonyState;
+async function act(tripId: string, action: CeremonyAction, state: CeremonyState | undefined) {
+  try {
+    const result =
+      action === 'hold'
+        ? await send<{ state: CeremonyState }>('POST', `/trips/${tripId}/ceremony/hold`, { held: !state?.held })
+        : await send<{ state: CeremonyState }>('POST', `/trips/${tripId}/ceremony/advance`, { direction: action });
+    if (result?.state) queryClient.setQueryData(['trip', tripId, 'ceremony', 'state'], result.state);
+    else void queryClient.invalidateQueries({ queryKey: ['trip', tripId, 'ceremony'] });
+  } catch (error) {
+    toast(formError(error));
+  }
 }
 
-interface SquadResponse {
-  unlocked: boolean;
-  payload: SquadWrappedPayload | null;
+type Vars = Record<string, string | number>;
+
+function cardVars(card: WrappedCard | undefined): Vars {
+  const out: Vars = {};
+  for (const [key, value] of Object.entries(card?.vars ?? {})) out[key] = value ?? '';
+  return out;
 }
 
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(query.matches);
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-  return reduced;
+function splitAbsurd(phrase: string): string {
+  return phrase.replace(/^[\d.,]+%?\s+/, '');
 }
 
-function varsOf(card: WrappedCard): Array<[string, string]> {
-  return Object.entries(card.vars ?? {}).map(([key, value]) => [key, displayValue(value)]);
-}
-
-function MainStat({ card, subStep }: { card: WrappedCard; subStep: number }) {
-  const vars = varsOf(card);
-  const featured = vars[Math.min(subStep, Math.max(vars.length - 1, 0))];
-  return (
-    <div className="ceremony-stat">
-      {featured ? (
-        <>
-          <span className="ceremony-stat__value tabular-nums">{featured[1]}</span>
-          <span className="ceremony-stat__label">{featured[0].replaceAll('_', ' ')}</span>
-        </>
-      ) : (
-        <span className="ceremony-stat__value">Cheers.</span>
-      )}
-      {vars.length > 1 && (
-        <div className="ceremony-pills">
-          {vars.map(([key, value]) => (
-            <span key={key}>
-              <b>{value}</b> {key.replaceAll('_', ' ')}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ReplayVisual({ replay, progress }: { replay: ReplayPayload; progress: number }) {
-  const visible = replayAtProgress(replay, progress);
-  const latestDay = visible.dayEndMarkers.at(-1);
-  const latestPop = visible.achievementPops.at(-1);
-  const memberTotals = replay.memberIndex.map((memberId, memberIndex) => ({
-    memberId,
-    count: visible.events.filter((event) => event.memberIndex === memberIndex).length,
-  }));
-
-  return (
-    <div className="replay" aria-label={`Trip replay ${Math.round(progress * 100)}% complete`}>
-      <div className="replay__sky" aria-hidden="true">
-        {visible.events.slice(-48).map((event, index) => (
-          <i
-            key={`${event.tOffsetMs}-${index}`}
-            style={
-              {
-                '--event-x': `${(event.tOffsetMs / Math.max(replay.totalPlaybackMs, 1)) * 100}%`,
-                '--event-y': `${14 + ((event.memberIndex * 19 + index * 7) % 70)}%`,
-                '--event-size': `${8 + Math.min(event.std * 5, 20)}px`,
-              } as React.CSSProperties
-            }
-          />
-        ))}
-        <div className="replay__pulse">
-          <strong>{visible.events.length}</strong>
-          <span>drinks replayed</span>
-        </div>
-      </div>
-      <div className="replay__members">
-        {memberTotals.map((member, index) => (
-          <span key={member.memberId} style={{ '--member': index } as React.CSSProperties}>
-            <i />
-            {member.memberId} <b>{member.count}</b>
-          </span>
-        ))}
-      </div>
-      <div className="replay__track">
-        <span style={{ width: `${progress * 100}%` }} />
-        {replay.dayEndMarkers.map((marker) => (
-          <i
-            key={`${marker.tripDay}-${marker.tOffsetMs}`}
-            style={{ left: `${(marker.tOffsetMs / Math.max(replay.totalPlaybackMs, 1)) * 100}%` }}
-            title={`Day ${marker.tripDay}`}
-          />
-        ))}
-      </div>
-      <div className="replay__caption">
-        <span>{latestDay ? `Day ${latestDay.tripDay} complete` : 'The trip begins…'}</span>
-        <span>
-          {latestPop ? `Achievement: ${latestPop.key.replaceAll('_', ' ')}` : 'Live replay'}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SideBoard({ card, subStep }: { card: WrappedCard; subStep: number }) {
-  const boards = card.data?.boards as Record<string, Array<Record<string, unknown>>> | undefined;
-  const keys = Object.keys(boards ?? {});
-  const selected = keys[Math.min(subStep, Math.max(keys.length - 1, 0))];
-  const rows = selected ? (boards?.[selected] ?? []) : [];
-  return (
-    <div className="ceremony-list">
-      <h3>{selected?.replaceAll('_', ' ') ?? 'No side quests logged'}</h3>
-      {rows.slice(0, 6).map((row, index) => (
-        <div
-          key={
-            typeof row.userId === 'string' || typeof row.userId === 'number'
-              ? String(row.userId)
-              : String(index)
-          }
-        >
-          <span>
-            {index + 1}. {displayValue(row.userId)}
-          </span>
-          <b>{displayValue(row.value)}</b>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PredictionBoard({ card, subStep }: { card: WrappedCard; subStep: number }) {
-  const rows = (card.data?.rows as Array<Record<string, unknown>> | undefined) ?? [];
-  const row = rows[Math.min(subStep, Math.max(rows.length - 1, 0))];
-  return row ? (
-    <div className="ceremony-versus">
-      <span>{displayValue(row.userId)}</span>
-      <div>
-        <small>predicted</small>
-        <strong>{displayValue(row.predicted)}</strong>
-      </div>
-      <i>vs</i>
-      <div>
-        <small>actual</small>
-        <strong>{displayValue(row.actual)}</strong>
-      </div>
-    </div>
-  ) : (
-    <MainStat card={card} subStep={subStep} />
-  );
-}
-
-function AwardBoard({ card, subStep }: { card: WrappedCard; subStep: number }) {
-  const award = card.winners?.[Math.min(subStep, Math.max((card.winners?.length ?? 1) - 1, 0))];
-  return award ? (
-    <div className="ceremony-award">
-      <span>🏆</span>
-      <h3>{award.award.replaceAll('_', ' ')}</h3>
-      <p>{award.winners.map((winner) => winner.userId).join(' & ')}</p>
-      {award.winners[0]?.venue && <small>at {award.winners[0].venue}</small>}
-    </div>
-  ) : (
-    <div className="ceremony-stat">
-      <span className="ceremony-stat__value">No awards</span>
-    </div>
-  );
-}
-
-function MainBoard({ card, subStep }: { card: WrappedCard; subStep: number }) {
-  const ranking = (card.data?.ranking as Array<Record<string, unknown>> | undefined) ?? [];
-  const visible = ranking.slice(0, subStep + 1);
-  return (
-    <div className="ceremony-list ceremony-list--ranking">
-      {visible.length === 0 && <h3>Ready for the final table?</h3>}
-      {visible.map((row) => (
-        <div key={String(row.userId)}>
-          <span>
-            <em>#{displayValue(row.rank)}</em> {displayValue(row.userId)}
-          </span>
-          <b>{displayValue(row.std)} std</b>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CardBody({
-  card,
-  subStep,
-  replayProgress,
+function Row({
+  rank,
+  name,
+  colorIndex,
+  value,
+  rise,
 }: {
-  card: WrappedCard;
-  subStep: number;
-  replayProgress: number;
+  rank: ReactNode;
+  name: string;
+  colorIndex: number | undefined;
+  value: ReactNode;
+  rise?: boolean;
 }) {
-  if (card.id === '06_replay') {
-    const replay = replayFromCard(card);
-    return replay ? (
-      <ReplayVisual replay={replay} progress={replayProgress} />
-    ) : (
-      <MainStat card={card} subStep={subStep} />
+  return (
+    <div className={`cr ${rise ? 'rise' : ''}`}>
+      <span className="rk">{rank}</span>
+      <span className="av" style={{ background: memberColour(colorIndex) }}>
+        {initial(name)}
+      </span>
+      <span>{name}</span>
+      <span className="v">{value}</span>
+    </div>
+  );
+}
+
+/** One squad card at the size of the room (DS §6.12 cast mode). */
+export function CastCard({ ctx, payload, state }: { ctx: TripCtx; payload: SquadWrappedPayload; state: CeremonyState }) {
+  const { pack, member, trip } = ctx;
+  const index = Math.min(10, Math.max(0, state.cardIndex));
+  const card = payload.cards[index];
+  const step = state.subStep;
+  const id = card?.id ?? '';
+  const vars = cardVars(card);
+  const variant = card?.key && card.key.startsWith(`${id}.`) ? card.key.slice(id.length + 1) : '';
+  const c = (field: string, extra: Vars = {}) =>
+    tpMaybe(pack, `wrappedSquad.cards.${id}.${field}`, { ...vars, ...extra }) ?? '';
+  const nameOf = (userId: unknown) => (typeof userId === 'string' ? (member(userId)?.name ?? '') : '');
+  const colourOf = (userId: unknown) => (typeof userId === 'string' ? member(userId)?.colorIndex : undefined);
+  const [now, setNow] = useState(serverNow());
+  useEffect(() => {
+    if (id !== '06_replay') return;
+    const timer = setInterval(() => setNow(serverNow()), 100);
+    return () => clearInterval(timer);
+  }, [id]);
+
+  let body: ReactNode;
+  switch (id) {
+    case '01_group_total':
+      body = (
+        <div className="in solo">
+          <div>
+            <h3>{c('lead')}</h3>
+            <p className="hero">{fmtL(Number(vars.groupLitres ?? 0))}</p>
+            <p className="line">{c('unit')}</p>
+            {step >= 1 && vars.absurdUnitPhrase !== 'empty' ? (
+              <p className="k">{c('absurd', { absurdUnitPhrase: splitAbsurd(String(vars.absurdUnitPhrase)) })}</p>
+            ) : null}
+          </div>
+        </div>
+      );
+      break;
+    case '02_drunk_o_meter': {
+      const series = (card?.data?.series as Array<{ hourIndex: number; std: number; localLabel: string }> | undefined) ?? [];
+      const incidents = (card?.data?.incidents as Array<{ hourIndex: number; std: number; rank: number }> | undefined) ?? [];
+      const max = Math.max(0.1, ...series.map((point) => point.std));
+      const span = Math.max(1, series.length - 1);
+      const shown = incidents.slice(0, step + 1);
+      body = (
+        <div className="in">
+          <div>
+            <h3>{c('title')}</h3>
+            {variant === 'empty' ? (
+              <p className="k">{c('empty')}</p>
+            ) : (
+              <>
+                {shown.map((incident, i) => {
+                  const point = series.find((item) => item.hourIndex === incident.hourIndex);
+                  return (
+                    <p className="line" key={incident.hourIndex}>
+                      {c('incident', {
+                        n: i + 1,
+                        day: `Day ${Math.floor(incident.hourIndex / 24) + 1}`,
+                        time: point?.localLabel ?? '',
+                      })}
+                    </p>
+                  );
+                })}
+                <p className="k">{c('note')}</p>
+              </>
+            )}
+          </div>
+          <svg viewBox="0 0 100 60" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }} aria-hidden="true">
+            <polyline
+              fill="none"
+              stroke="#F4A73B"
+              strokeWidth="0.8"
+              points={series.map((point, i) => `${(i / span) * 100},${58 - (point.std / max) * 54}`).join(' ')}
+            />
+            {shown.map((incident) => {
+              const i = series.findIndex((item) => item.hourIndex === incident.hourIndex);
+              return <circle key={incident.hourIndex} cx={(i / span) * 100} cy={58 - (incident.std / max) * 54} r="1.6" fill="#FFF3DE" />;
+            })}
+          </svg>
+        </div>
+      );
+      break;
+    }
+    case '03_keg':
+      body = (
+        <div className="in solo">
+          <div>
+            <h3>{c('lead')}</h3>
+            <p className="hero">{vars.kegPct}%</p>
+            <p className="line">{c('unit')}</p>
+            <p className="k">{c('note')}</p>
+          </div>
+        </div>
+      );
+      break;
+    case '04_cities_venues':
+      body = (
+        <div className="in solo">
+          <div>
+            <h3>{c('title')}</h3>
+            {variant === 'empty' ? (
+              <p className="k">{c('empty')}</p>
+            ) : (
+              <>
+                <p className="line">{c('top')}</p>
+                {step >= 1 ? <p className="k">{c('note')}</p> : null}
+              </>
+            )}
+          </div>
+        </div>
+      );
+      break;
+    case '05_crowd_then_divisive': {
+      const noCrowd = variant.includes('noCrowd');
+      const noDivisive = variant.includes('noDivisive');
+      const names = { lowName: nameOf(vars.lowName), highName: nameOf(vars.highName) };
+      body = (
+        <div className="in">
+          <div>
+            <h3>{noCrowd ? c('divLead') : c('favLead')}</h3>
+            {noCrowd ? <p className="k">{c('noCrowd')}</p> : <p className="hero" style={{ fontSize: '9cqw' }}>{c('fav')}</p>}
+          </div>
+          <div style={{ alignSelf: 'end' }}>
+            {step >= 1 || noCrowd ? (
+              noDivisive ? (
+                <p className="k">{c('noDivisive')}</p>
+              ) : (
+                <>
+                  <p className="line">{c('divLead')}</p>
+                  <p className="hero" style={{ fontSize: '7cqw' }}>{c('div')}</p>
+                  <p className="k">{c('divNote', names)}</p>
+                </>
+              )
+            ) : null}
+          </div>
+        </div>
+      );
+      break;
+    }
+    case '06_replay': {
+      const replay = replayFromCard(card);
+      const elapsed = state.held || state.replayStartedAt === null
+        ? state.replayElapsedMs
+        : state.replayElapsedMs + (now - state.replayStartedAt);
+      const progress = replay ? clampReplayProgress(elapsed, replay.totalPlaybackMs) : 0;
+      const view = replay ? replayAtProgress(replay, progress) : null;
+      const points = replay?.events.filter((event) => event.lat !== null && event.lng !== null) ?? [];
+      const lats = points.map((event) => event.lat!);
+      const lngs = points.map((event) => event.lng!);
+      const minLat = Math.min(...lats);
+      const minLng = Math.min(...lngs);
+      const spanGeo = Math.max(Math.max(...lats) - minLat, Math.max(...lngs) - minLng, 0.001);
+      const mvp = view?.dayEndMarkers[view.dayEndMarkers.length - 1];
+      body = (
+        <div className="in">
+          <div>
+            <h3>{c('title')}</h3>
+            {variant === 'empty' ? <p className="k">{c('empty')}</p> : null}
+            {mvp && replay ? (
+              <p className="line">{c('nightMvp', { name: nameOf(replay.memberIndex[mvp.nightMvpIndex]) })}</p>
+            ) : null}
+            {state.held ? <p className="k">{pack.wrappedSquad.hold}</p> : null}
+          </div>
+          <div className="replay-dots" aria-hidden="true">
+            {view?.events
+              .filter((event) => event.lat !== null && event.lng !== null)
+              .map((event, i) => (
+                <i
+                  key={i}
+                  style={{
+                    left: `${8 + ((event.lng! - minLng) / spanGeo) * 84}%`,
+                    top: `${92 - ((event.lat! - minLat) / spanGeo) * 84}%`,
+                    background: memberColour(colourOf(replay?.memberIndex[event.memberIndex])),
+                  }}
+                />
+              ))}
+          </div>
+        </div>
+      );
+      break;
+    }
+    case '07_side_boards': {
+      const boards = (card?.data?.boards as Record<string, Array<{ userId: string; rank: number; value: number }>> | undefined) ?? {};
+      const entries = Object.entries(boards).slice(0, step + 1);
+      body = (
+        <div className="in">
+          <div>
+            <h3>{c('title')}</h3>
+            <p className="k">{c('note')}</p>
+          </div>
+          <div className="rows">
+            {entries.map(([key, rows]) => (
+              <div key={key} className="cr rise" style={{ gridTemplateColumns: '1fr auto' }}>
+                <span>{tpMaybe(pack, `sideLeaderboards.${key}`) ?? key}</span>
+                <b>{nameOf(rows[0]?.userId) || '—'}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+      break;
+    }
+    case '08_predictions': {
+      const rows = (card?.data?.rows as Array<{ userId: string; predicted: number; actual: number }> | undefined) ?? [];
+      body = (
+        <div className="in">
+          <div>
+            <h3>{c('title')}</h3>
+            {variant === 'empty' ? (
+              <p className="k">{c('empty')}</p>
+            ) : step >= rows.length - 1 ? (
+              <p className="line">{c('oracle', { name: nameOf(vars.userId) })}</p>
+            ) : null}
+          </div>
+          <div className="rows">
+            {rows.slice(0, step + 1).map((row) => (
+              <div key={row.userId} className="cr rise" style={{ gridTemplateColumns: '1fr' }}>
+                <span>{c('row', { name: nameOf(row.userId), predicted: row.predicted, actual: row.actual })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+      break;
+    }
+    case '09_awards': {
+      const winners = card?.winners ?? [];
+      const current = winners[Math.min(step, winners.length - 1)];
+      const venue = current?.winners[0]?.venue ?? '';
+      body = (
+        <div className="in solo">
+          <div>
+            <h3>{c('title')}</h3>
+            {current ? (
+              <>
+                <p className="line" style={{ color: '#CFB696' }}>
+                  {tpMaybe(pack, `awards.${current.award}.name`, { venue }) ?? current.award}
+                </p>
+                <p className="hero" style={{ fontSize: '10cqw' }}>
+                  {current.winners.map((winner) => nameOf(winner.userId)).join(' & ')}
+                </p>
+                {current.isGhostSlot ? <p className="k">{c('ghostNote')}</p> : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+      );
+      break;
+    }
+    case '10_main_board': {
+      const ranking = (card?.data?.ranking as Array<{ userId: string; rank: number; litres: number }> | undefined) ?? [];
+      const revealedAll = step >= ranking.length - 1;
+      const shown = ranking.slice(0, Math.min(step + 1, Math.max(0, ranking.length - 1)));
+      const top = ranking[ranking.length - 1];
+      body = (
+        <div className="in">
+          <div>
+            <h3>{c('title')}</h3>
+            <div className="k">{c('subtitle')}</div>
+          </div>
+          <div className="stand">
+            {shown.map((row, i) => (
+              <Row
+                key={row.userId}
+                rank={row.rank}
+                name={nameOf(row.userId)}
+                colorIndex={colourOf(row.userId)}
+                value={fmtL(row.litres)}
+                rise={i === shown.length - 1}
+              />
+            ))}
+            {top ? (
+              revealedAll ? (
+                <div className="cr top rise">
+                  <span className="rk">1</span>
+                  <span className="av" style={{ background: memberColour(colourOf(top.userId)) }}>
+                    {initial(nameOf(top.userId))}
+                  </span>
+                  <span className="q">{nameOf(top.userId)}</span>
+                  <span className="q">{fmtL(top.litres)}</span>
+                </div>
+              ) : (
+                <div className="cr top">
+                  <span className="rk">1</span>
+                  <span />
+                  <span className="q">{c('mvp')}</span>
+                  <span className="q">?</span>
+                </div>
+              )
+            ) : null}
+          </div>
+        </div>
+      );
+      break;
+    }
+    case '11_credits': {
+      const bloopers = (card?.data?.bloopers as Record<string, { userId: string; edits?: number } | null> | undefined) ?? {};
+      const lines = [
+        bloopers.smallest ? c('smallest', { name: nameOf(bloopers.smallest.userId) }) : null,
+        bloopers.strangestNote ? c('strangestNote', { name: nameOf(bloopers.strangestNote.userId) }) : null,
+        bloopers.mostEdited ? c('mostEdited', { name: nameOf(bloopers.mostEdited.userId), drink: vars.drink ?? '' }) : null,
+        bloopers.loneWater ? c('lateWater', { name: nameOf(bloopers.loneWater.userId), time: `${vars.time}:00` }) : null,
+      ].filter(Boolean);
+      body = (
+        <div className="in">
+          <div>
+            <h3>{c('title')}</h3>
+            <p className="line">{trip.name}</p>
+          </div>
+          <div className="rows">
+            <p className="line" style={{ margin: 0 }}>{c('bloopersTitle')}</p>
+            {lines.map((line) => (
+              <div key={line}>
+                <span>{line}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+      break;
+    }
+    default:
+      body = null;
+  }
+
+  return (
+    <>
+      {body}
+      <div className="foot">
+        <span>{tp(pack, 'wrappedSquad.footer', { n: index + 1 })}</span>
+        <span>{trip.name}</span>
+      </div>
+    </>
+  );
+}
+
+function CastFrame({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <div className="cast" role="img" aria-label={label} tabIndex={0}>
+      {children}
+    </div>
+  );
+}
+
+function Waiting({ ctx }: { ctx: TripCtx }) {
+  const owner = ctx.member(ctx.trip.ownerId)?.name ?? 'the owner';
+  return (
+    <div className="in solo">
+      <div>
+        <h3>{ctx.pack.wrappedSquad.title}</h3>
+        <p className="line">{tp(ctx.pack, 'wrappedSquad.waitingTitle', { owner })}</p>
+        <p className="k">{tp(ctx.pack, 'wrappedSquad.waitingBody', { owner })}</p>
+      </div>
+    </div>
+  );
+}
+
+/** The TV: full-bleed 16:9, type in container units so it reads from the back of the room. */
+function BigScreen() {
+  const ctx = useTripCtx();
+  const { state, squad } = useCeremony(ctx.trip.id, true);
+  useEffect(() => {
+    if (!ctx.isOwner) return;
+    const onKey = (event: KeyboardEvent) => {
+      const action = actionForKey(event.key);
+      if (!action) return;
+      event.preventDefault();
+      void act(ctx.trip.id, action, state.data);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ctx.isOwner, ctx.trip.id, state.data]);
+
+  const running = state.data && state.data.status !== 'not_started' && squad.data?.payload;
+  return (
+    <div className="cast-root">
+      <CastFrame label={ctx.pack.wrappedSquad.title}>
+        {running ? <CastCard ctx={ctx} payload={squad.data!.payload!} state={state.data!} /> : <Waiting ctx={ctx} />}
+      </CastFrame>
+    </div>
+  );
+}
+
+const CARD_NAMES = [
+  '01_group_total',
+  '02_drunk_o_meter',
+  '03_keg',
+  '04_cities_venues',
+  '05_crowd_then_divisive',
+  '06_replay',
+  '07_side_boards',
+  '08_predictions',
+  '09_awards',
+  '10_main_board',
+  '11_credits',
+];
+
+/** The owner's phone becomes the clicker; everyone else watches along (DS §6.12). */
+function PhoneCeremony() {
+  const ctx = useTripCtx();
+  const { trip, pack, isOwner } = ctx;
+  const navigate = useNavigate();
+  const { state, squad } = useCeremony(trip.id, false);
+  const [busy, setBusy] = useState(false);
+  if (state.isPending) return <Splash />;
+  const s = state.data;
+  const payload = squad.data?.payload;
+
+  if (!isOwner || !s || s.status === 'not_started') {
+    const canStart = isOwner && s?.status === 'not_started';
+    return (
+      <main className="scr">
+        <TopBar />
+        <h1 className="ph">{pack.wrappedSquad.title}</h1>
+        <div style={{ marginTop: 18, borderRadius: 14, overflow: 'hidden' }}>
+          <CastFrame label={pack.wrappedSquad.title}>
+            {s && s.status !== 'not_started' && payload ? <CastCard ctx={ctx} payload={payload} state={s} /> : <Waiting ctx={ctx} />}
+          </CastFrame>
+        </div>
+        {canStart ? (
+          <button
+            type="button"
+            className="logbtn"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void send('POST', `/trips/${trip.id}/ceremony/start`)
+                .then(() => state.refetch())
+                .catch((error: unknown) => toast(formError(error)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {pack.wrappedSquad.start}
+          </button>
+        ) : null}
+        <button type="button" className="btn sec full" style={{ margin: '12px 0 24px' }} onClick={() => navigate(`/t/${trip.id}/wrapped`)}>
+          {pack.wrappedSquad.back}
+        </button>
+      </main>
     );
   }
-  if (card.id === '07_side_boards') return <SideBoard card={card} subStep={subStep} />;
-  if (card.id === '08_predictions') return <PredictionBoard card={card} subStep={subStep} />;
-  if (card.id === '09_awards') return <AwardBoard card={card} subStep={subStep} />;
-  if (card.id === '10_main_board') return <MainBoard card={card} subStep={subStep} />;
-  return <MainStat card={card} subStep={subStep} />;
-}
 
-export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
-  const [state, setState] = useState<CeremonyState | null>(null);
-  const [payload, setPayload] = useState<SquadWrappedPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [live, setLive] = useState(false);
-  const [clockNow, setClockNow] = useState(() => Date.now());
-  const reducedMotion = useReducedMotion();
-
-  const refresh = useCallback(async () => {
-    try {
-      const [ceremony, squad] = await Promise.all([
-        api<CeremonyResponse>(`/api/v1/trips/${tripId}/ceremony/state`),
-        api<SquadResponse>(`/api/v1/trips/${tripId}/wrapped/squad`),
-      ]);
-      setState(ceremony.state);
-      setPayload(squad.payload);
-      setError(null);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to load ceremony');
-    } finally {
-      setLoading(false);
-    }
-  }, [tripId]);
-
-  useEffect(() => {
-    void refresh();
-    const events = new EventSource(appUrl(`/api/v1/trips/${tripId}/events`), {
-      withCredentials: true,
-    });
-    const sync = () => void refresh();
-    events.addEventListener('hello', () => {
-      setLive(true);
-      void refresh();
-    });
-    events.addEventListener('ceremony.started', sync);
-    events.addEventListener('ceremony.step', sync);
-    events.onerror = () => setLive(false);
-    return () => events.close();
-  }, [refresh, tripId]);
-
-  const perform = useCallback(
-    async (action: CeremonyAction) => {
-      if (!state || busy) return;
-      if (
-        action === 'hold' &&
-        (state.status !== 'running' || payload?.cards[state.cardIndex]?.id !== '06_replay')
-      ) {
-        return;
-      }
-      if (action === 'back' && state.status === 'not_started') return;
-      setBusy(true);
-      try {
-        let path: string;
-        let body: Record<string, unknown> | undefined;
-        if (action === 'hold') {
-          path = 'hold';
-          body = { held: !state.held };
-        } else if (action === 'next' && state.status === 'not_started') {
-          path = 'start';
-        } else if (action === 'next' && state.status === 'ended') {
-          path = 'restart';
-        } else {
-          path = 'advance';
-          body = { direction: action === 'back' ? 'back' : 'next' };
-        }
-        const result = await api<CeremonyResponse>(`/api/v1/trips/${tripId}/ceremony/${path}`, {
-          method: 'POST',
-          ...(body ? { body: JSON.stringify(body) } : {}),
-        });
-        setState(result.state);
-        setError(null);
-        if (path === 'start' || path === 'restart') await refresh();
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'Ceremony control failed');
-      } finally {
-        setBusy(false);
-      }
-    },
-    [busy, payload, refresh, state, tripId],
-  );
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const action = actionForKey(event.key);
-      if (!action || event.repeat) return;
-      event.preventDefault();
-      void perform(action);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [perform]);
-
-  const card = payload?.cards[state?.cardIndex ?? 0];
-  const replay = replayFromCard(card);
-  const replayActive = state?.status === 'running' && card?.id === '06_replay';
-  useEffect(() => {
-    if (!replayActive || state?.held || reducedMotion) return;
-    setClockNow(Date.now());
-    const timer = window.setInterval(() => setClockNow(Date.now()), 100);
-    return () => window.clearInterval(timer);
-  }, [reducedMotion, replayActive, state?.held]);
-  const replayElapsed = reducedMotion
-    ? (replay?.totalPlaybackMs ?? 0)
-    : (state?.replayElapsedMs ?? 0) +
-      (state?.replayStartedAt ? Math.max(0, clockNow - state.replayStartedAt) : 0);
-  const replayProgress = replay ? clampReplayProgress(replayElapsed, replay.totalPlaybackMs) : 0;
-
-  const progress = useMemo(() => {
-    if (!payload || !state) return 0;
-    if (state.status === 'ended') return 100;
-    return ((state.cardIndex + 1) / payload.cards.length) * 100;
-  }, [payload, state]);
-
-  if (loading)
+  const index = Math.min(10, s.cardIndex);
+  const titleOf = (at: number) => {
+    const cardId = CARD_NAMES[at]!;
     return (
-      <main className="ceremony-screen ceremony-screen--center">
-        <div className="ceremony-loader" aria-hidden="true" />
-        <span className="sr-only" role="status">
-          Loading ceremony
-        </span>
-        <p>Loading the big screen…</p>
-      </main>
+      tpMaybe(pack, `wrappedSquad.cards.${cardId}.title`) ??
+      tpMaybe(pack, `wrappedSquad.cards.${cardId}.lead`) ??
+      tpMaybe(pack, `wrappedSquad.cards.${cardId}.favLead`) ??
+      pack.wrappedSquad.title
     );
-  if (!state)
-    return (
-      <main className="ceremony-screen ceremony-screen--center">
-        <h1>Couldn’t join the ceremony</h1>
-        <p>{error}</p>
-        <button onClick={() => void refresh()}>Try again</button>
-      </main>
-    );
+  };
+  const title = titleOf(index);
+  const ranking = (payload?.cards[9]?.data?.ranking as unknown[] | undefined) ?? [];
+  const lastReveal = index === 9 && s.subStep === ranking.length - 2;
+  // "Next: …" names what the next tap brings up (DS §6.10 presenter remote).
+  const upNext =
+    s.status === 'ended'
+      ? null
+      : index === 9 && ranking.length > 0
+        ? `${Math.min(ranking.length, s.subStep + 1)} of ${ranking.length} revealed.${
+            lastReveal ? ` Next: ${tpMaybe(pack, 'wrappedSquad.cards.10_main_board.mvp') ?? '#1'}.` : ''
+          }`
+        : index < 10
+          ? `Next: ${titleOf(index + 1)}.`
+          : null;
+  const nextLabel =
+    s.status === 'ended'
+      ? 'Done'
+      : lastReveal
+        ? pack.wrappedSquad.reveal
+        : 'Next';
 
   return (
-    <main
-      className={`ceremony-screen ceremony-screen--card-${state.cardIndex + 1}`}
-      aria-busy={busy}
-      onClick={() => void perform('next')}
-    >
-      <div className="ceremony-ambient" aria-hidden="true" />
-      <header className="ceremony-header">
-        <span className="ceremony-brand">DRUNKIFY WRAPPED</span>
-        <span className={`ceremony-live ${live ? 'is-live' : ''}`}>
-          {live ? 'LIVE' : 'SYNCING'}
-        </span>
-        <span className="ceremony-count tabular-nums">
-          {Math.min(state.cardIndex + 1, payload?.cards.length ?? 11)} /{' '}
-          {payload?.cards.length ?? 11}
-        </span>
-      </header>
-
-      {state.status === 'not_started' ? (
-        <section className="ceremony-waiting">
-          <p>Squad Wrapped</p>
-          <h1>Ready when you are.</h1>
-          <button
-            disabled={busy}
-            onClick={(event) => {
-              event.stopPropagation();
-              void perform('next');
-            }}
-          >
-            Start ceremony
+    <main className="scr">
+      <div className="p-top">
+        <span style={{ fontWeight: 600 }}>{tp(pack, 'wrappedSquad.presenting', { device: 'the big screen' })}</span>
+      </div>
+      <p className="pmuted" style={{ marginTop: 14 }}>
+        {tp(pack, 'wrappedSquad.footer', { n: index + 1 })}
+      </p>
+      <h1 className="ph">{title}</h1>
+      {upNext ? <p className="pmuted">{upNext}</p> : null}
+      <button
+        type="button"
+        className="logbtn remote-next"
+        onClick={() => void (s.status === 'ended' ? navigate(`/t/${trip.id}/wrapped`) : act(trip.id, 'next', s))}
+      >
+        {nextLabel}
+      </button>
+      <div className="share" style={{ margin: '12px 0 24px' }}>
+        <button type="button" className="btn sec" onClick={() => void act(trip.id, 'back', s)}>
+          {pack.wrappedSquad.back}
+        </button>
+        {s.status === 'ended' ? null : (
+          <button type="button" className="btn sec" aria-pressed={s.held} onClick={() => void act(trip.id, 'hold', s)}>
+            {pack.wrappedSquad.hold}
           </button>
-        </section>
-      ) : state.status === 'ended' ? (
-        <section className="ceremony-waiting">
-          <p>That’s a wrap</p>
-          <h1>One more round?</h1>
-          <button
-            disabled={busy}
-            onClick={(event) => {
-              event.stopPropagation();
-              void perform('next');
-            }}
-          >
-            Restart ceremony
-          </button>
-        </section>
-      ) : card ? (
-        <section className="ceremony-stage" key={`${card.id}-${state.subStep}`}>
-          <p className="ceremony-kicker">
-            {card.key?.replaceAll('_', ' ') ?? `Card ${state.cardIndex + 1}`}
-          </p>
-          <h1>{cardTitle(card)}</h1>
-          <CardBody card={card} subStep={state.subStep} replayProgress={replayProgress} />
-        </section>
-      ) : (
-        <section className="ceremony-waiting">
-          <h1>Waiting for the squad payload…</h1>
-        </section>
-      )}
-
-      <footer className="ceremony-footer" onClick={(event) => event.stopPropagation()}>
-        <div className="ceremony-progress" aria-label={`${Math.round(progress)}% through ceremony`}>
-          <span style={{ width: `${progress}%` }} />
-        </div>
-        <div className="ceremony-controls">
-          <button
-            aria-label="Previous reveal"
-            disabled={busy || state.status === 'not_started'}
-            onClick={() => void perform('back')}
-          >
-            ←
-          </button>
-          <span>
-            {state.held ? 'Held · press H to resume' : '← / → / space · H to hold · tap to advance'}
-          </span>
-          <button
-            aria-label={state.status === 'ended' ? 'Restart ceremony' : 'Next reveal'}
-            disabled={busy}
-            onClick={() => void perform('next')}
-          >
-            {state.status === 'ended' ? '↻' : '→'}
-          </button>
-        </div>
-      </footer>
-      {state.held && <div className="ceremony-held">HELD</div>}
-      {error && (
-        <div className="ceremony-error" role="alert">
-          {error}
-        </div>
-      )}
+        )}
+      </div>
     </main>
   );
+}
+
+export function CeremonyRoute() {
+  const [params] = useSearchParams();
+  return params.get('display') === 'big' ? <BigScreen /> : <PhoneCeremony />;
 }

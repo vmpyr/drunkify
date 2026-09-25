@@ -253,19 +253,25 @@ describe('M5 read APIs', () => {
     });
     const dashboardBody = dashboard.json<{
       totals: {
-        you: { std: number; drinks: number };
-        squad: { std: number; drinks: number };
+        you: { std: number; litres: number; drinks: number };
+        squad: { std: number; litres: number; drinks: number };
       };
-      byDay: Array<{ day: number; dateLabel: string; std: number }>;
-      byCategory: Array<{ category: string; std: number }>;
+      byDay: Array<{ day: number; dateLabel: string; std: number; litres: number }>;
+      byCategory: Array<{ category: string; std: number; litres: number }>;
       recentAchievements: unknown[];
     }>();
     expect(dashboardBody.totals.you.drinks).toBe(1);
     expect(dashboardBody.totals.squad.drinks).toBe(3);
     expect(dashboardBody.byDay[0]).toMatchObject({ day: 1 });
     expect(typeof dashboardBody.byDay[0]!.std).toBe('number');
+    expect(typeof dashboardBody.byDay[0]!.litres).toBe('number');
+    expect(typeof dashboardBody.totals.squad.litres).toBe('number');
     expect(dashboardBody.byCategory).toEqual([
-      { category: 'beer', std: dashboardBody.byCategory[0]!.std },
+      {
+        category: 'beer',
+        std: dashboardBody.byCategory[0]!.std,
+        litres: dashboardBody.byCategory[0]!.litres,
+      },
     ]);
     expect(typeof dashboardBody.byCategory[0]!.std).toBe('number');
     expect(dashboardBody.recentAchievements).toHaveLength(2);

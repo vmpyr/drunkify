@@ -639,18 +639,22 @@ export function buildPersonalWrapped(
       ? null
       : makeCard('12_prediction_vs_reality', {
           predicted: prediction.myTotalStd,
-          actual: round(totals.stdDrinks, 1),
+          actual: round(totals.litres, 2),
         });
 
-  const perDay = stdPerDay(totals.stdDrinks, denominatorDays);
-  const card13 = makeCard('13_rank', { perDay: round(perDay, 1) });
+  // Ranks band on std drinks a day; the card shows litres a day.
+  const litresPerDay = totals.litres / Math.max(denominatorDays, 1);
+  const card13 = makeCard('13_rank', {
+    perDay: round(litresPerDay, 2),
+    stdPerDay: round(stdPerDay(totals.stdDrinks, denominatorDays), 1),
+  });
   const card14 = makeCard(
     '14_archetype',
     {
       archetype: archetype.main,
       secondary: archetype.secondary,
       twinUserId: twin?.partnerId ?? null,
-      perDay: round(perDay, 1),
+      perDay: round(litresPerDay, 2),
       days,
       ratings: features.ratingsCount,
       unique: features.uniqueDrinks,
