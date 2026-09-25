@@ -7,6 +7,7 @@ import './styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { App } from './app/App.js';
 import { CeremonyScreen } from './ceremony/CeremonyScreen.js';
 import { bigScreenTripId } from './ceremony/model.js';
 import {
@@ -17,7 +18,7 @@ import {
   type OutboxChangedDetail,
 } from './offline/index.js';
 
-function App() {
+function RootApp() {
   const [queued, setQueued] = useState(0);
   const [sessionLost, setSessionLost] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -59,35 +60,14 @@ function App() {
     };
   }, []);
 
-  return (
-    <main className="shell">
-      {sessionLost && (
-        <aside className="session-banner" role="status">
-          <strong>Session lost.</strong> Your queued drinks are safe. Sign in with the same account
-          to sync them.
-        </aside>
-      )}
-      <p className="eyebrow">Trip drink log</p>
-      <h1>Drunkify</h1>
-      <p className="lede">Installable, offline-ready, and built to keep every queued round.</p>
-      <section className="sync-card" aria-live="polite">
-        <span className={`connection-dot ${online ? 'online' : 'offline'}`} aria-hidden="true" />
-        <div>
-          <strong>{online ? 'Online' : 'Offline'}</strong>
-          <p>
-            {queued === 0
-              ? 'No drinks waiting to sync.'
-              : `${queued} queued ${queued === 1 ? 'drink' : 'drinks'} waiting to sync.`}
-          </p>
-        </div>
-      </section>
-    </main>
-  );
+  return <App online={online} queued={queued} sessionLost={sessionLost} />;
 }
 
 const root = document.querySelector('#root');
 if (!root) throw new Error('Missing #root');
 const ceremonyTripId = bigScreenTripId(window.location);
 createRoot(root).render(
-  <StrictMode>{ceremonyTripId ? <CeremonyScreen tripId={ceremonyTripId} /> : <App />}</StrictMode>,
+  <StrictMode>
+    {ceremonyTripId ? <CeremonyScreen tripId={ceremonyTripId} /> : <RootApp />}
+  </StrictMode>,
 );

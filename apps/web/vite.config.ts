@@ -2,8 +2,14 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const basePath = process.env.VITE_BASE_PATH ?? '/';
+const proxyPrefix = basePath === '/' ? '' : basePath.replace(/\/$/, '');
+const proxyPath = (path: string) => `${proxyPrefix}${path}`;
+const rewriteProxyPath = (path: string) =>
+  proxyPrefix && path.startsWith(proxyPrefix) ? path.slice(proxyPrefix.length) : path;
+
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH ?? '/',
+  base: basePath,
   plugins: [
     react(),
     VitePWA({
@@ -77,9 +83,21 @@ export default defineConfig({
   server: {
     allowedHosts: ['devpod-mumbai.uberinternal.com'],
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: true },
-      '/healthz': { target: 'http://localhost:3000', changeOrigin: true },
-      '/readyz': { target: 'http://localhost:3000', changeOrigin: true },
+      [proxyPath('/api')]: {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: rewriteProxyPath,
+      },
+      [proxyPath('/healthz')]: {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: rewriteProxyPath,
+      },
+      [proxyPath('/readyz')]: {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: rewriteProxyPath,
+      },
     },
   },
 });

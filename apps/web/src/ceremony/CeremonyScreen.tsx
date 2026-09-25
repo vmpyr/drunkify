@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { api, appUrl } from '../app/api.js';
 import {
   actionForKey,
   cardTitle,
@@ -40,26 +41,6 @@ function useReducedMotion(): boolean {
     return () => query.removeEventListener('change', update);
   }, []);
   return reduced;
-}
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  if (init?.body !== undefined) headers.set('content-type', 'application/json');
-  if (init?.method && !['GET', 'HEAD', 'OPTIONS'].includes(init.method.toUpperCase())) {
-    headers.set('x-requested-with', 'drunkify');
-  }
-  const response = await fetch(path, {
-    credentials: 'include',
-    ...init,
-    headers,
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as {
-      error?: { message?: string };
-    } | null;
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return (await response.json()) as T;
 }
 
 function varsOf(card: WrappedCard): Array<[string, string]> {
@@ -282,7 +263,9 @@ export function CeremonyScreen({ tripId }: CeremonyScreenProps) {
 
   useEffect(() => {
     void refresh();
-    const events = new EventSource(`/api/v1/trips/${tripId}/events`, { withCredentials: true });
+    const events = new EventSource(appUrl(`/api/v1/trips/${tripId}/events`), {
+      withCredentials: true,
+    });
     const sync = () => void refresh();
     events.addEventListener('hello', () => {
       setLive(true);
