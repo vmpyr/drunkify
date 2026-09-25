@@ -82,7 +82,7 @@ describe('M1 database bootstrap', () => {
     const { db, sqlitePath } = await fixture('known-password');
     await db.migrate();
     expect(readAll(sqlitePath, "select value from app_meta where key='schema_version'")).toEqual([
-      { value: '1' },
+      { value: '2' },
     ]);
     await db.close();
   });
@@ -242,7 +242,7 @@ describe('M1 sessions and readiness', () => {
     expect((await app.inject({ method: 'GET', url: '/healthz' })).statusCode).toBe(200);
     const ready = await app.inject({ method: 'GET', url: '/readyz' });
     expect(ready.statusCode).toBe(200);
-    expect(ready.json()).toMatchObject({ status: 'ok', schemaVersion: '1' });
+    expect(ready.json()).toMatchObject({ status: 'ok', schemaVersion: '2' });
     await app.close();
 
     const failingDb: DatabaseContext = {
@@ -265,7 +265,7 @@ describe('M1 sessions and readiness', () => {
       headers: { cookie },
     });
     expect(notReady.statusCode).toBe(503);
-    expect(notReady.json()).toMatchObject({ status: 'not_ready', schemaVersion: '1' });
+    expect(notReady.json()).toMatchObject({ status: 'not_ready', schemaVersion: '2' });
     await notReadyApp.close();
     await db.close();
   });

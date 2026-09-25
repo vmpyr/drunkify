@@ -65,13 +65,109 @@ export const sessions = sqliteTable(
   ],
 );
 
+export const trips = sqliteTable('trips', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  timezone: text('timezone').notNull(),
+  themeId: text('theme_id').notNull().default('classic'),
+  unlockAt: integer('unlock_at').notNull(),
+  ownerId: text('owner_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  ceremonyStartedAt: integer('ceremony_started_at'),
+  final24hMarkedAt: integer('final24h_marked_at'),
+  wrappedUnlockedMarkedAt: integer('wrapped_unlocked_marked_at'),
+  dataRevision: integer('data_revision').notNull().default(0),
+  createdAt: integer('created_at').notNull().default(nowMs),
+  updatedAt: integer('updated_at').notNull().default(nowMs),
+});
+
+export const tripMembers = sqliteTable(
+  'trip_members',
+  {
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    colorIndex: integer('color_index').notNull(),
+    joinedAt: integer('joined_at').notNull().default(nowMs),
+    lastOpenedAt: integer('last_opened_at'),
+    firstDrinkAt: integer('first_drink_at'),
+    missedBannerDismissed: integer('missed_banner_dismissed', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+  },
+  (table) => [
+    uniqueIndex('ux_trip_members_trip_user').on(table.tripId, table.userId),
+    uniqueIndex('ux_trip_members_trip_color').on(table.tripId, table.colorIndex),
+    index('ix_trip_members_user_id').on(table.userId),
+  ],
+);
+
+export const invites = sqliteTable(
+  'invites',
+  {
+    id: text('id').primaryKey(),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    name: text('name'),
+    email: text('email'),
+    tripId: text('trip_id').references(() => trips.id, { onDelete: 'cascade' }),
+    state: text('state').notNull().default('pending'),
+    acceptedBy: text('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+    acceptedAt: integer('accepted_at'),
+    createdAt: integer('created_at').notNull().default(nowMs),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('ux_invites_token_hash').on(table.tokenHash),
+    index('ix_invites_trip_id').on(table.tripId),
+    index('ix_invites_created_by').on(table.createdBy),
+    index('ix_invites_state_expires_at').on(table.state, table.expiresAt),
+    check('ck_invites_state', sql`${table.state} in ('pending', 'accepted', 'revoked')`),
+  ],
+);
+
+export const passwordResets = sqliteTable(
+  'password_resets',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at').notNull().default(nowMs),
+    expiresAt: integer('expires_at').notNull(),
+    usedAt: integer('used_at'),
+  },
+  (table) => [
+    uniqueIndex('ux_password_resets_token_hash').on(table.tokenHash),
+    index('ix_password_resets_user_id').on(table.userId),
+  ],
+);
+
 export const appMeta = sqliteTable('app_meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
   updatedAt: integer('updated_at').notNull().default(nowMs),
 });
 
-export const schemaTables = { users, sessions, appMeta };
+export const schemaTables = {
+  users,
+  sessions,
+  trips,
+  tripMembers,
+  invites,
+  passwordResets,
+  appMeta,
+};
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;

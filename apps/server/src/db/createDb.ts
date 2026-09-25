@@ -15,7 +15,7 @@ import type { Config } from '../config.js';
 import * as pgSchema from './schema.pg.js';
 import * as sqliteSchema from './schema.sqlite.js';
 
-export const SCHEMA_VERSION = '1';
+export const SCHEMA_VERSION = '2';
 
 export interface SessionRecord {
   id: string;
@@ -42,6 +42,10 @@ export interface SeedResult {
 
 export interface DatabaseContext {
   driver: 'sqlite' | 'postgres';
+  raw: {
+    sqlite?: BetterSqlite3.Database;
+    postgres?: pg.Pool;
+  };
   migrate(): Promise<void>;
   ping(): Promise<void>;
   getSchemaVersion(): Promise<string>;
@@ -94,6 +98,7 @@ function createSqliteDb(config: Config): DatabaseContext {
 
   return {
     driver: 'sqlite',
+    raw: { sqlite: client },
     migrate() {
       migrateSqlite(db, { migrationsFolder: resolveMigrationsFolder(config, 'sqlite') });
       const now = Date.now();
@@ -225,6 +230,7 @@ function createPostgresDb(config: Config): DatabaseContext {
 
   return {
     driver: 'postgres',
+    raw: { postgres: pool },
     async migrate() {
       await migratePg(db, { migrationsFolder: resolveMigrationsFolder(config, 'postgres') });
       const now = Date.now();

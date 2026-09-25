@@ -8,6 +8,13 @@
       "when": 1790355675316,
       "tag": "0000_tiresome_war_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790361226924,
+      "tag": "0001_lean_micromacro",
+      "breakpoints": true
     }
   ]
 }

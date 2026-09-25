@@ -11,6 +11,7 @@ import { healthResponseSchema, readinessResponseSchema } from '@drunkify/shared'
 import { setSessionCookie, verifySession } from './auth/session.js';
 import type { Config } from './config.js';
 import { SCHEMA_VERSION, type DatabaseContext } from './db/createDb.js';
+import { registerM2Routes } from './routes/m2.js';
 
 export interface AppOptions {
   config: Config;
@@ -23,17 +24,35 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: options.config.LOG_LEVEL },
     trustProxy: options.config.TRUST_PROXY,
+    disableRequestLogging: true,
   });
 
   await app.register(fastifyCookie);
   app.decorateRequest('auth', null);
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/')) return;
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+      const requestedWith = request.headers['x-requested-with'];
+      const origin = request.headers.origin;
+      const expectedOrigin = options.config.PUBLIC_URL
+        ? new URL(options.config.PUBLIC_URL).origin
+        : undefined;
+      if (
+        requestedWith !== 'drunkify' ||
+        (origin !== undefined && expectedOrigin !== undefined && origin !== expectedOrigin)
+      ) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'bad_request', message: 'Invalid request origin' } });
+      }
+    }
     const token = request.cookies[options.config.SESSION_COOKIE_NAME];
     const auth = await verifySession(options.db, token);
     request.auth = auth?.session ?? null;
     if (auth?.renewed && token) setSessionCookie(reply, options.config, token);
   });
+
+  registerM2Routes(app, options);
 
   app.get('/healthz', () => healthResponseSchema.parse({ status: 'ok' }));
   app.get('/readyz', async (_request, reply) => {
