@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 
 import { healthResponseSchema, readinessResponseSchema } from '@drunkify/shared';
 
@@ -13,6 +13,7 @@ import type { Config } from './config.js';
 import { SCHEMA_VERSION, type DatabaseContext } from './db/createDb.js';
 import { registerM2Routes } from './routes/m2.js';
 import { registerM3Routes } from './routes/m3.js';
+import { registerM4Routes } from './routes/m4.js';
 
 export interface AppOptions {
   config: Config;
@@ -25,7 +26,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: options.config.LOG_LEVEL },
     trustProxy: options.config.TRUST_PROXY,
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
   });
 
   await app.register(fastifyCookie);
@@ -55,6 +56,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
 
   registerM2Routes(app, options);
   registerM3Routes(app, options);
+  registerM4Routes(app, options);
 
   app.get('/healthz', () => healthResponseSchema.parse({ status: 'ok' }));
   app.get('/readyz', async (_request, reply) => {

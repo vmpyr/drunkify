@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import type pg from 'pg';
+import { v7 as uuidv7 } from 'uuid';
 
 import type { DatabaseContext } from './createDb.js';
 
@@ -68,6 +69,92 @@ export interface MemberRecord {
   joinedAt: number;
   disabled: boolean;
   isOwner: boolean;
+}
+
+export const DRINK_CATEGORIES = [
+  'beer',
+  'wine',
+  'cocktail',
+  'spirit',
+  'shot',
+  'cider',
+  'seltzer',
+  'soft',
+  'other',
+] as const;
+export type DrinkCategory = (typeof DRINK_CATEGORIES)[number];
+
+export type VenueInput =
+  | { id: string }
+  | { candidate: { name: string; lat: number; lng: number; osmId: string } }
+  | { name: string }
+  | null;
+
+export interface DrinkInput {
+  category: DrinkCategory;
+  drinkName: string;
+  sizeMl: number;
+  abv: number;
+  qty: number;
+  drunkAt: number;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  altitude: number | null;
+  speed: number | null;
+  venue: VenueInput;
+  note: string | null;
+  rating?: number | null;
+}
+
+export interface DrinkRecord {
+  id: string;
+  userId: string;
+  tripId: string;
+  category: DrinkCategory;
+  drinkName: string;
+  sizeMl: number;
+  abv: number;
+  qty: number;
+  drunkAt: number;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  altitude: number | null;
+  speed: number | null;
+  venueId: string | null;
+  venueName: string | null;
+  city: string | null;
+  countryCode: string | null;
+  rating: number | null;
+  note: string | null;
+  createdAt: number;
+  updatedAt: number;
+  editCount: number;
+  lastEditedAt: number | null;
+}
+
+export interface VenueRecord {
+  id: string;
+  tripId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  source: 'osm' | 'user';
+  osmId: string | null;
+}
+
+export interface FavouriteRecord {
+  id: string;
+  category: DrinkCategory;
+  drinkName: string;
+  sizeMl: number;
+  abv: number;
+}
+
+export interface DrinkMutationResult {
+  statusCode: number;
+  body: Record<string, unknown>;
 }
 
 export type TokenFailure = 'invalid' | 'expired' | 'used' | 'revoked';
@@ -229,11 +316,63 @@ function normalizeTrip(row: Record<string, unknown> | undefined): TripRecord | n
   };
 }
 
+function nullableNumber(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function nullableText(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeDrink(row: Record<string, unknown> | undefined): DrinkRecord | null {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    tripId: String(row.trip_id),
+    category: row.category as DrinkCategory,
+    drinkName: String(row.drink_name),
+    sizeMl: Number(row.size_ml),
+    abv: Number(row.abv),
+    qty: Number(row.qty),
+    drunkAt: Number(row.drunk_at),
+    lat: nullableNumber(row.lat),
+    lng: nullableNumber(row.lng),
+    accuracy: nullableNumber(row.accuracy),
+    altitude: nullableNumber(row.altitude),
+    speed: nullableNumber(row.speed),
+    venueId: nullableText(row.venue_id),
+    venueName: nullableText(row.venue_name),
+    city: nullableText(row.city),
+    countryCode: nullableText(row.country_code),
+    rating: nullableNumber(row.rating),
+    note: nullableText(row.note),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    editCount: Number(row.edit_count),
+    lastEditedAt: nullableNumber(row.last_edited_at),
+  };
+}
+
+function normalizeVenue(row: Record<string, unknown> | undefined): VenueRecord | null {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    tripId: String(row.trip_id),
+    name: String(row.name),
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+    source: row.source === 'osm' ? 'osm' : 'user',
+    osmId: nullableText(row.osm_id),
+  };
+}
+
 export class M2Store {
   readonly #adapter: SqlAdapter;
   readonly #booleanTrue: boolean | number;
   readonly #booleanFalse: boolean | number;
   readonly #forUpdate: string;
+  readonly #isPostgres: boolean;
 
   constructor(db: DatabaseContext) {
     if (db.raw.sqlite) {
@@ -241,11 +380,13 @@ export class M2Store {
       this.#booleanTrue = 1;
       this.#booleanFalse = 0;
       this.#forUpdate = '';
+      this.#isPostgres = false;
     } else if (db.raw.postgres) {
       this.#adapter = postgresAdapter(db.raw.postgres);
       this.#booleanTrue = true;
       this.#booleanFalse = false;
       this.#forUpdate = 'for update';
+      this.#isPostgres = true;
     } else {
       throw new Error('Database raw connection is unavailable');
     }
@@ -871,4 +1012,600 @@ export class M2Store {
       };
     });
   }
+
+  async #prepareDrinkMutation(
+    tx: SqlExecutor,
+    tripId: string,
+    userId: string,
+  ): Promise<DrinkMutationResult | null> {
+    const trip = await tx.get<Record<string, unknown>>(
+      `select id, ceremony_started_at from trips where id = ? ${this.#forUpdate}`,
+      [tripId],
+    );
+    if (!trip) {
+      return {
+        statusCode: 404,
+        body: { error: { code: 'not_found', message: 'Trip not found' } },
+      };
+    }
+    if (trip.ceremony_started_at !== null) {
+      return {
+        statusCode: 409,
+        body: { error: { code: 'ceremony_started', message: 'Ceremony has started' } },
+      };
+    }
+    const member = await tx.get(
+      'select 1 as value from trip_members where trip_id = ? and user_id = ?',
+      [tripId, userId],
+    );
+    if (!member) {
+      return {
+        statusCode: 403,
+        body: { error: { code: 'forbidden', message: 'Trip membership required' } },
+      };
+    }
+    return null;
+  }
+
+  async #resolveVenue(
+    tx: SqlExecutor,
+    tripId: string,
+    venue: VenueInput,
+    now: number,
+  ): Promise<
+    { venueId: string | null; venueName: string | null } | { error: DrinkMutationResult }
+  > {
+    if (venue === null) return { venueId: null, venueName: null };
+    if ('name' in venue) return { venueId: null, venueName: venue.name };
+    if ('id' in venue) {
+      const existing = await tx.get<Record<string, unknown>>(
+        'select * from venues where id = ? and trip_id = ?',
+        [venue.id, tripId],
+      );
+      const normalized = normalizeVenue(existing);
+      if (!normalized) {
+        return {
+          error: {
+            statusCode: 422,
+            body: { error: { code: 'validation_failed', message: 'Invalid venue' } },
+          },
+        };
+      }
+      return { venueId: normalized.id, venueName: normalized.name };
+    }
+
+    const candidate = venue.candidate;
+    const venueId = uuidLike();
+    await tx.run(
+      `insert into venues
+        (id, trip_id, name, lat, lng, source, osm_id, created_at, updated_at)
+       values (?, ?, ?, ?, ?, 'osm', ?, ?, ?)
+       on conflict (trip_id, osm_id) where osm_id is not null
+       do update set name = excluded.name, lat = excluded.lat, lng = excluded.lng,
+                     updated_at = excluded.updated_at`,
+      [venueId, tripId, candidate.name, candidate.lat, candidate.lng, candidate.osmId, now, now],
+    );
+    const stored = await tx.get<Record<string, unknown>>(
+      'select * from venues where trip_id = ? and osm_id = ?',
+      [tripId, candidate.osmId],
+    );
+    const normalized = normalizeVenue(stored);
+    if (!normalized) throw new Error('Venue upsert failed');
+    return { venueId: normalized.id, venueName: normalized.name };
+  }
+
+  async #findDrink(tx: SqlExecutor, drinkId: string): Promise<DrinkRecord | null> {
+    return normalizeDrink(
+      await tx.get<Record<string, unknown>>('select * from drinks where id = ?', [drinkId]),
+    );
+  }
+
+  async #createDrink(
+    tx: SqlExecutor,
+    input: {
+      id: string;
+      tripId: string;
+      userId: string;
+      drink: DrinkInput;
+      now: number;
+    },
+  ): Promise<DrinkMutationResult> {
+    const gate = await this.#prepareDrinkMutation(tx, input.tripId, input.userId);
+    if (gate) return gate;
+    const existing = await this.#findDrink(tx, input.id);
+    if (existing) {
+      if (existing.tripId === input.tripId && existing.userId === input.userId) {
+        return { statusCode: 200, body: { drink: existing } };
+      }
+      return {
+        statusCode: 409,
+        body: { error: { code: 'id_conflict', message: 'Drink id is already in use' } },
+      };
+    }
+    const venue = await this.#resolveVenue(tx, input.tripId, input.drink.venue, input.now);
+    if ('error' in venue) return venue.error;
+    await tx.run(
+      `insert into drinks
+        (id, user_id, trip_id, category, drink_name, size_ml, abv, qty, drunk_at,
+         lat, lng, accuracy, altitude, speed, venue_id, venue_name, note,
+         created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.id,
+        input.userId,
+        input.tripId,
+        input.drink.category,
+        input.drink.drinkName,
+        input.drink.sizeMl,
+        input.drink.abv,
+        input.drink.qty,
+        input.drink.drunkAt,
+        input.drink.lat,
+        input.drink.lng,
+        input.drink.accuracy,
+        input.drink.altitude,
+        input.drink.speed,
+        venue.venueId,
+        venue.venueName,
+        input.drink.note,
+        input.now,
+        input.now,
+      ],
+    );
+    await tx.run(
+      `update trip_members set first_drink_at = ?
+       where trip_id = ? and user_id = ? and first_drink_at is null`,
+      [input.now, input.tripId, input.userId],
+    );
+    await tx.run(
+      'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+      [input.now, input.tripId],
+    );
+    return {
+      statusCode: 201,
+      body: { drink: (await this.#findDrink(tx, input.id))! },
+    };
+  }
+
+  async #updateDrink(
+    tx: SqlExecutor,
+    input: {
+      id: string;
+      tripId: string;
+      userId: string;
+      drink: DrinkInput;
+      now: number;
+    },
+  ): Promise<DrinkMutationResult> {
+    const gate = await this.#prepareDrinkMutation(tx, input.tripId, input.userId);
+    if (gate) return gate;
+    const existing = await this.#findDrink(tx, input.id);
+    if (!existing || existing.tripId !== input.tripId) {
+      return {
+        statusCode: 404,
+        body: { error: { code: 'not_found', message: 'Drink not found' } },
+      };
+    }
+    if (existing.userId !== input.userId) {
+      return {
+        statusCode: 403,
+        body: { error: { code: 'forbidden', message: 'Drink belongs to another user' } },
+      };
+    }
+    const venue = await this.#resolveVenue(tx, input.tripId, input.drink.venue, input.now);
+    if ('error' in venue) return venue.error;
+    await tx.run(
+      `update drinks set
+         category = ?, drink_name = ?, size_ml = ?, abv = ?, qty = ?, drunk_at = ?,
+         lat = ?, lng = ?, accuracy = ?, altitude = ?, speed = ?,
+         venue_id = ?, venue_name = ?, note = ?, rating = ?,
+         updated_at = ?, edit_count = edit_count + 1, last_edited_at = ?
+       where id = ?`,
+      [
+        input.drink.category,
+        input.drink.drinkName,
+        input.drink.sizeMl,
+        input.drink.abv,
+        input.drink.qty,
+        input.drink.drunkAt,
+        input.drink.lat,
+        input.drink.lng,
+        input.drink.accuracy,
+        input.drink.altitude,
+        input.drink.speed,
+        venue.venueId,
+        venue.venueName,
+        input.drink.note,
+        input.drink.rating ?? existing.rating,
+        input.now,
+        input.now,
+        input.id,
+      ],
+    );
+    await tx.run(
+      'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+      [input.now, input.tripId],
+    );
+    return { statusCode: 200, body: { drink: (await this.#findDrink(tx, input.id))! } };
+  }
+
+  async #rateDrink(
+    tx: SqlExecutor,
+    input: { id: string; tripId: string; userId: string; rating: number; now: number },
+  ): Promise<DrinkMutationResult> {
+    const gate = await this.#prepareDrinkMutation(tx, input.tripId, input.userId);
+    if (gate) return gate;
+    const existing = await this.#findDrink(tx, input.id);
+    if (!existing || existing.tripId !== input.tripId) {
+      return {
+        statusCode: 404,
+        body: { error: { code: 'not_found', message: 'Drink not found' } },
+      };
+    }
+    if (existing.userId !== input.userId) {
+      return {
+        statusCode: 403,
+        body: { error: { code: 'forbidden', message: 'Drink belongs to another user' } },
+      };
+    }
+    if (existing.category === 'soft') {
+      return {
+        statusCode: 422,
+        body: { error: { code: 'validation_failed', message: 'Soft drinks cannot be rated' } },
+      };
+    }
+    await tx.run('update drinks set rating = ?, updated_at = ? where id = ?', [
+      input.rating,
+      input.now,
+      input.id,
+    ]);
+    await tx.run(
+      'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+      [input.now, input.tripId],
+    );
+    return { statusCode: 200, body: { drink: (await this.#findDrink(tx, input.id))! } };
+  }
+
+  async #deleteDrink(
+    tx: SqlExecutor,
+    input: { id: string; tripId: string; userId: string; now: number },
+  ): Promise<DrinkMutationResult> {
+    const gate = await this.#prepareDrinkMutation(tx, input.tripId, input.userId);
+    if (gate) return gate;
+    const existing = await this.#findDrink(tx, input.id);
+    if (!existing || existing.tripId !== input.tripId) {
+      return {
+        statusCode: 404,
+        body: { error: { code: 'not_found', message: 'Drink not found' } },
+      };
+    }
+    if (existing.userId !== input.userId) {
+      return {
+        statusCode: 403,
+        body: { error: { code: 'forbidden', message: 'Drink belongs to another user' } },
+      };
+    }
+    await tx.run('delete from drinks where id = ?', [input.id]);
+    await tx.run(
+      'update trips set data_revision = data_revision + 1, updated_at = ? where id = ?',
+      [input.now, input.tripId],
+    );
+    return { statusCode: 204, body: {} };
+  }
+
+  createDrink(input: {
+    id: string;
+    tripId: string;
+    userId: string;
+    drink: DrinkInput;
+    now: number;
+  }): Promise<DrinkMutationResult> {
+    return this.#adapter.transaction((tx) => this.#createDrink(tx, input));
+  }
+
+  updateDrink(input: {
+    id: string;
+    tripId: string;
+    userId: string;
+    drink: DrinkInput;
+    now: number;
+  }): Promise<DrinkMutationResult> {
+    return this.#adapter.transaction((tx) => this.#updateDrink(tx, input));
+  }
+
+  rateDrink(input: {
+    id: string;
+    tripId: string;
+    userId: string;
+    rating: number;
+    now: number;
+  }): Promise<DrinkMutationResult> {
+    return this.#adapter.transaction((tx) => this.#rateDrink(tx, input));
+  }
+
+  deleteDrink(input: {
+    id: string;
+    tripId: string;
+    userId: string;
+    now: number;
+  }): Promise<DrinkMutationResult> {
+    return this.#adapter.transaction((tx) => this.#deleteDrink(tx, input));
+  }
+
+  async applyDrinkOp(input: {
+    clientOpId: string;
+    tripId: string;
+    userId: string;
+    type: 'create' | 'update' | 'delete' | 'rate';
+    drinkId: string;
+    payload?: DrinkInput | { rating: number };
+    now: number;
+  }): Promise<DrinkMutationResult> {
+    return this.#adapter.transaction(async (tx) => {
+      const stored = await tx.get<Record<string, unknown>>(
+        'select status_code, response from applied_ops where client_op_id = ?',
+        [input.clientOpId],
+      );
+      if (stored) {
+        const response =
+          typeof stored.response === 'string'
+            ? (JSON.parse(stored.response) as Record<string, unknown>)
+            : (stored.response as Record<string, unknown>);
+        return { statusCode: Number(stored.status_code), body: response };
+      }
+      let result: DrinkMutationResult;
+      if (input.clientOpId === input.drinkId) {
+        result = {
+          statusCode: 422,
+          body: {
+            error: {
+              code: 'validation_failed',
+              message: 'clientOpId must differ from drinkId',
+            },
+          },
+        };
+      } else if (input.type === 'create' && input.payload && 'category' in input.payload) {
+        result = await this.#createDrink(tx, {
+          id: input.drinkId,
+          tripId: input.tripId,
+          userId: input.userId,
+          drink: input.payload,
+          now: input.now,
+        });
+      } else if (input.type === 'update' && input.payload && 'category' in input.payload) {
+        result = await this.#updateDrink(tx, {
+          id: input.drinkId,
+          tripId: input.tripId,
+          userId: input.userId,
+          drink: input.payload,
+          now: input.now,
+        });
+      } else if (
+        input.type === 'rate' &&
+        input.payload &&
+        'rating' in input.payload &&
+        typeof input.payload.rating === 'number'
+      ) {
+        result = await this.#rateDrink(tx, {
+          id: input.drinkId,
+          tripId: input.tripId,
+          userId: input.userId,
+          rating: input.payload.rating,
+          now: input.now,
+        });
+      } else if (input.type === 'delete') {
+        result = await this.#deleteDrink(tx, {
+          id: input.drinkId,
+          tripId: input.tripId,
+          userId: input.userId,
+          now: input.now,
+        });
+      } else {
+        result = {
+          statusCode: 422,
+          body: { error: { code: 'validation_failed', message: 'Invalid sync operation' } },
+        };
+      }
+      await tx.run(
+        `insert into applied_ops
+          (client_op_id, user_id, trip_id, drink_id, type, status_code, response, applied_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.clientOpId,
+          input.userId,
+          input.tripId,
+          input.drinkId,
+          input.type,
+          result.statusCode,
+          this.#isPostgres ? result.body : JSON.stringify(result.body),
+          input.now,
+        ],
+      );
+      return result;
+    });
+  }
+
+  async getRecents(
+    tripId: string,
+    userId: string,
+    limit: number,
+  ): Promise<{
+    lastDrink: DrinkRecord | null;
+    lastByCategory: Partial<Record<DrinkCategory, DrinkRecord>>;
+    items: DrinkRecord[];
+  }> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select * from drinks
+       where trip_id = ? and user_id = ?
+       order by drunk_at desc, created_at desc`,
+      [tripId, userId],
+    );
+    const drinks = rows.map(normalizeDrink).filter((drink): drink is DrinkRecord => drink !== null);
+    const favourites = await this.listFavourites(userId);
+    const favouriteKeys = new Set(
+      favourites.map((item) => `${item.category}\u0000${item.drinkName}\u0000${item.sizeMl}`),
+    );
+    const lastByCategory: Partial<Record<DrinkCategory, DrinkRecord>> = {};
+    const deduplicated: DrinkRecord[] = [];
+    const seen = new Set<string>();
+    for (const drink of drinks) {
+      lastByCategory[drink.category] ??= drink;
+      const key = `${drink.category}\u0000${drink.drinkName}\u0000${drink.sizeMl}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicated.push(drink);
+      }
+    }
+    const items = deduplicated
+      .map((drink, index) => ({
+        drink,
+        index,
+        favourite: favouriteKeys.has(
+          `${drink.category}\u0000${drink.drinkName}\u0000${drink.sizeMl}`,
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          Number(right.favourite) - Number(left.favourite) || left.index - right.index,
+      )
+      .slice(0, limit)
+      .map(({ drink }) => drink);
+    return { lastDrink: drinks[0] ?? null, lastByCategory, items };
+  }
+
+  async listFavourites(userId: string): Promise<FavouriteRecord[]> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select id, category, drink_name, size_ml, abv
+       from favourites where user_id = ? order by created_at desc`,
+      [userId],
+    );
+    return rows.map((row) => ({
+      id: String(row.id),
+      category: row.category as DrinkCategory,
+      drinkName: String(row.drink_name),
+      sizeMl: Number(row.size_ml),
+      abv: Number(row.abv),
+    }));
+  }
+
+  async upsertFavourite(input: {
+    id: string;
+    userId: string;
+    category: DrinkCategory;
+    drinkName: string;
+    sizeMl: number;
+    abv: number;
+    now: number;
+  }): Promise<FavouriteRecord> {
+    await this.#adapter.run(
+      `insert into favourites
+        (id, user_id, category, drink_name, size_ml, abv, created_at)
+       values (?, ?, ?, ?, ?, ?, ?)
+       on conflict (user_id, category, drink_name, size_ml)
+       do update set abv = excluded.abv`,
+      [input.id, input.userId, input.category, input.drinkName, input.sizeMl, input.abv, input.now],
+    );
+    const row = await this.#adapter.get<Record<string, unknown>>(
+      `select id, category, drink_name, size_ml, abv from favourites
+       where user_id = ? and category = ? and drink_name = ? and size_ml = ?`,
+      [input.userId, input.category, input.drinkName, input.sizeMl],
+    );
+    return {
+      id: String(row!.id),
+      category: row!.category as DrinkCategory,
+      drinkName: String(row!.drink_name),
+      sizeMl: Number(row!.size_ml),
+      abv: Number(row!.abv),
+    };
+  }
+
+  async deleteFavourite(id: string, userId: string): Promise<'ok' | 'not_found' | 'forbidden'> {
+    const row = await this.#adapter.get<{ user_id: string }>(
+      'select user_id from favourites where id = ?',
+      [id],
+    );
+    if (!row) return 'not_found';
+    if (row.user_id !== userId) return 'forbidden';
+    await this.#adapter.run('delete from favourites where id = ?', [id]);
+    return 'ok';
+  }
+
+  async listCustomDrinkNames(userId: string, category?: DrinkCategory) {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      `select name, abv from custom_drink_names
+       where user_id = ? ${category ? 'and category = ?' : ''}
+       order by last_used_at desc`,
+      category ? [userId, category] : [userId],
+    );
+    return rows.map((row) => ({ name: String(row.name), abv: nullableNumber(row.abv) }));
+  }
+
+  async upsertCustomDrinkName(input: {
+    id: string;
+    userId: string;
+    category: DrinkCategory;
+    name: string;
+    abv: number | null;
+    now: number;
+  }): Promise<void> {
+    await this.#adapter.run(
+      `insert into custom_drink_names
+        (id, user_id, category, name, abv, created_at, last_used_at)
+       values (?, ?, ?, ?, ?, ?, ?)
+       on conflict (user_id, category, name)
+       do update set abv = excluded.abv, last_used_at = excluded.last_used_at`,
+      [input.id, input.userId, input.category, input.name, input.abv, input.now, input.now],
+    );
+  }
+
+  async suggestVenue(
+    tripId: string,
+    lat: number,
+    lng: number,
+  ): Promise<{ kind: 'existing'; venue: VenueRecord } | { kind: 'none' }> {
+    const rows = await this.#adapter.all<Record<string, unknown>>(
+      'select * from venues where trip_id = ?',
+      [tripId],
+    );
+    const nearest = rows
+      .map(normalizeVenue)
+      .filter((venue): venue is VenueRecord => venue !== null)
+      .map((venue) => ({ venue, distance: haversineMetres(lat, lng, venue.lat, venue.lng) }))
+      .filter((item) => item.distance <= 150)
+      .sort((left, right) => left.distance - right.distance)[0];
+    return nearest ? { kind: 'existing', venue: nearest.venue } : { kind: 'none' };
+  }
+
+  async renameVenue(
+    tripId: string,
+    venueId: string,
+    name: string,
+    now: number,
+  ): Promise<VenueRecord | null> {
+    const result = await this.#adapter.run(
+      'update venues set name = ?, updated_at = ? where id = ? and trip_id = ?',
+      [name, now, venueId, tripId],
+    );
+    if (result.changes === 0) return null;
+    return normalizeVenue(
+      await this.#adapter.get<Record<string, unknown>>('select * from venues where id = ?', [
+        venueId,
+      ]),
+    );
+  }
+}
+
+function uuidLike(): string {
+  return uuidv7();
+}
+
+function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const earthRadius = 6_371_000;
+  const latitudeDelta = radians(lat2 - lat1);
+  const longitudeDelta = radians(lng2 - lng1);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }

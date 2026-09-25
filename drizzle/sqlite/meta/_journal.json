@@ -15,6 +15,13 @@
       "when": 1790361226924,
       "tag": "0001_lean_micromacro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790362175996,
+      "tag": "0002_rapid_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

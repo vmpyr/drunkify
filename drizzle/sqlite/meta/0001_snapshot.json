@@ -122,31 +122,22 @@
       "indexes": {
         "ux_invites_token_hash": {
           "name": "ux_invites_token_hash",
-          "columns": [
-            "token_hash"
-          ],
+          "columns": ["token_hash"],
           "isUnique": true
         },
         "ix_invites_trip_id": {
           "name": "ix_invites_trip_id",
-          "columns": [
-            "trip_id"
-          ],
+          "columns": ["trip_id"],
           "isUnique": false
         },
         "ix_invites_created_by": {
           "name": "ix_invites_created_by",
-          "columns": [
-            "created_by"
-          ],
+          "columns": ["created_by"],
           "isUnique": false
         },
         "ix_invites_state_expires_at": {
           "name": "ix_invites_state_expires_at",
-          "columns": [
-            "state",
-            "expires_at"
-          ],
+          "columns": ["state", "expires_at"],
           "isUnique": false
         }
       },
@@ -155,12 +146,8 @@
           "name": "invites_created_by_users_id_fk",
           "tableFrom": "invites",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
@@ -168,12 +155,8 @@
           "name": "invites_trip_id_trips_id_fk",
           "tableFrom": "invites",
           "tableTo": "trips",
-          "columnsFrom": [
-            "trip_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trip_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -181,12 +164,8 @@
           "name": "invites_accepted_by_users_id_fk",
           "tableFrom": "invites",
           "tableTo": "users",
-          "columnsFrom": [
-            "accepted_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["accepted_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -257,16 +236,12 @@
       "indexes": {
         "ux_password_resets_token_hash": {
           "name": "ux_password_resets_token_hash",
-          "columns": [
-            "token_hash"
-          ],
+          "columns": ["token_hash"],
           "isUnique": true
         },
         "ix_password_resets_user_id": {
           "name": "ix_password_resets_user_id",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         }
       },
@@ -275,12 +250,8 @@
           "name": "password_resets_user_id_users_id_fk",
           "tableFrom": "password_resets",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -288,12 +259,8 @@
           "name": "password_resets_created_by_users_id_fk",
           "tableFrom": "password_resets",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -367,30 +334,22 @@
       "indexes": {
         "ux_sessions_token_hash": {
           "name": "ux_sessions_token_hash",
-          "columns": [
-            "token_hash"
-          ],
+          "columns": ["token_hash"],
           "isUnique": true
         },
         "ix_sessions_user_id": {
           "name": "ix_sessions_user_id",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "ix_sessions_expires_at": {
           "name": "ix_sessions_expires_at",
-          "columns": [
-            "expires_at"
-          ],
+          "columns": ["expires_at"],
           "isUnique": false
         },
         "ix_sessions_revoked_at": {
           "name": "ix_sessions_revoked_at",
-          "columns": [
-            "revoked_at"
-          ],
+          "columns": ["revoked_at"],
           "isUnique": false
         }
       },
@@ -399,12 +358,8 @@
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -471,25 +426,17 @@
       "indexes": {
         "ux_trip_members_trip_user": {
           "name": "ux_trip_members_trip_user",
-          "columns": [
-            "trip_id",
-            "user_id"
-          ],
+          "columns": ["trip_id", "user_id"],
           "isUnique": true
         },
         "ux_trip_members_trip_color": {
           "name": "ux_trip_members_trip_color",
-          "columns": [
-            "trip_id",
-            "color_index"
-          ],
+          "columns": ["trip_id", "color_index"],
           "isUnique": true
         },
         "ix_trip_members_user_id": {
           "name": "ix_trip_members_user_id",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         }
       },
@@ -498,12 +445,8 @@
           "name": "trip_members_trip_id_trips_id_fk",
           "tableFrom": "trip_members",
           "tableTo": "trips",
-          "columnsFrom": [
-            "trip_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["trip_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -511,12 +454,8 @@
           "name": "trip_members_user_id_users_id_fk",
           "tableFrom": "trip_members",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -637,12 +576,8 @@
           "name": "trips_owner_id_users_id_fk",
           "tableFrom": "trips",
           "tableTo": "users",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -740,16 +675,12 @@
       "indexes": {
         "ux_users_email": {
           "name": "ux_users_email",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         },
         "ux_users_one_admin": {
           "name": "ux_users_one_admin",
-          "columns": [
-            "role"
-          ],
+          "columns": ["role"],
           "isUnique": true,
           "where": "\"users\".\"role\" = 'admin'"
         }
@@ -759,12 +690,8 @@
           "name": "users_invited_by_users_id_fk",
           "tableFrom": "users",
           "tableTo": "users",
-          "columnsFrom": [
-            "invited_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invited_by"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }

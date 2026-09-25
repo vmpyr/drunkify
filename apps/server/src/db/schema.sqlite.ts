@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -153,6 +154,147 @@ export const passwordResets = sqliteTable(
   ],
 );
 
+export const venues = sqliteTable(
+  'venues',
+  {
+    id: text('id').primaryKey(),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    lat: real('lat').notNull(),
+    lng: real('lng').notNull(),
+    source: text('source').notNull(),
+    osmId: text('osm_id'),
+    createdAt: integer('created_at').notNull().default(nowMs),
+    updatedAt: integer('updated_at').notNull().default(nowMs),
+  },
+  (table) => [
+    index('ix_venues_trip_id').on(table.tripId),
+    index('ix_venues_trip_lat_lng').on(table.tripId, table.lat, table.lng),
+    uniqueIndex('ux_venues_trip_osm')
+      .on(table.tripId, table.osmId)
+      .where(sql`${table.osmId} is not null`),
+    check('ck_venues_source', sql`${table.source} in ('osm', 'user')`),
+  ],
+);
+
+export const drinks = sqliteTable(
+  'drinks',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    drinkName: text('drink_name').notNull(),
+    sizeMl: integer('size_ml').notNull(),
+    abv: real('abv').notNull(),
+    qty: real('qty').notNull().default(1),
+    drunkAt: integer('drunk_at').notNull(),
+    lat: real('lat'),
+    lng: real('lng'),
+    accuracy: real('accuracy'),
+    altitude: real('altitude'),
+    speed: real('speed'),
+    venueId: text('venue_id').references(() => venues.id, { onDelete: 'set null' }),
+    venueName: text('venue_name'),
+    city: text('city'),
+    countryCode: text('country_code'),
+    rating: integer('rating'),
+    note: text('note'),
+    createdAt: integer('created_at').notNull().default(nowMs),
+    updatedAt: integer('updated_at').notNull().default(nowMs),
+    editCount: integer('edit_count').notNull().default(0),
+    lastEditedAt: integer('last_edited_at'),
+  },
+  (table) => [
+    index('ix_drinks_trip_drunk_at').on(table.tripId, table.drunkAt),
+    index('ix_drinks_trip_user_drunk_at').on(table.tripId, table.userId, table.drunkAt),
+    index('ix_drinks_recent_key').on(table.userId, table.category, table.drinkName, table.sizeMl),
+    index('ix_drinks_trip_venue').on(table.tripId, table.venueId),
+    check(
+      'ck_drinks_category',
+      sql`${table.category} in ('beer','wine','cocktail','spirit','shot','cider','seltzer','soft','other')`,
+    ),
+    check('ck_drinks_size', sql`${table.sizeMl} > 0`),
+    check('ck_drinks_abv', sql`${table.abv} >= 0 and ${table.abv} <= 80`),
+    check('ck_drinks_qty', sql`${table.qty} > 0`),
+    check('ck_drinks_rating', sql`${table.rating} is null or ${table.rating} between 1 and 5`),
+    check('ck_drinks_note', sql`${table.note} is null or length(${table.note}) <= 80`),
+  ],
+);
+
+export const customDrinkNames = sqliteTable(
+  'custom_drink_names',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    name: text('name').notNull(),
+    abv: real('abv'),
+    createdAt: integer('created_at').notNull().default(nowMs),
+    lastUsedAt: integer('last_used_at').notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex('ux_custom_drink_names_user_category_name').on(
+      table.userId,
+      table.category,
+      table.name,
+    ),
+  ],
+);
+
+export const favourites = sqliteTable(
+  'favourites',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    drinkName: text('drink_name').notNull(),
+    sizeMl: integer('size_ml').notNull(),
+    abv: real('abv').notNull(),
+    createdAt: integer('created_at').notNull().default(nowMs),
+  },
+  (table) => [
+    uniqueIndex('ux_favourites_user_key').on(
+      table.userId,
+      table.category,
+      table.drinkName,
+      table.sizeMl,
+    ),
+  ],
+);
+
+export const appliedOps = sqliteTable(
+  'applied_ops',
+  {
+    clientOpId: text('client_op_id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    drinkId: text('drink_id').notNull(),
+    type: text('type').notNull(),
+    statusCode: integer('status_code').notNull(),
+    response: text('response').notNull(),
+    appliedAt: integer('applied_at').notNull().default(nowMs),
+  },
+  (table) => [
+    index('ix_applied_ops_trip_user_applied').on(table.tripId, table.userId, table.appliedAt),
+    check('ck_applied_ops_type', sql`${table.type} in ('create','update','delete','rate')`),
+  ],
+);
+
 export const appMeta = sqliteTable('app_meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
@@ -166,6 +308,11 @@ export const schemaTables = {
   tripMembers,
   invites,
   passwordResets,
+  venues,
+  drinks,
+  customDrinkNames,
+  favourites,
+  appliedOps,
   appMeta,
 };
 export type User = typeof users.$inferSelect;
