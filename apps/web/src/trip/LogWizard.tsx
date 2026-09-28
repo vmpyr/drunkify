@@ -158,7 +158,7 @@ function WizardBody({ target, onClose }: { target: WizardTarget; onClose: () => 
   const [customMl, setCustomMl] = useState('');
   const [venueDraft, setVenueDraft] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
-  const customNames = useCustomNames(s.category);
+  const customNames = useCustomNames(s.category, trip.id);
   const isEdit = target.mode === 'edit';
   const category = categoryOf(s.category);
 

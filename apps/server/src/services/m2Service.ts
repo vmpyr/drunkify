@@ -10,6 +10,7 @@ export {
   type DrinkInput,
   type DrinkMutationResult,
   type DrinkRecord,
+  type EarlyReleaseResult,
   type FavouriteRecord,
   type FeedAchievement,
   type InviteRecord,

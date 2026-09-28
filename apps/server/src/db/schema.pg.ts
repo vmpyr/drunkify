@@ -352,6 +352,21 @@ export const wrappedViews = pgTable(
   (table) => [uniqueIndex('ux_wrapped_views_trip_user').on(table.tripId, table.userId)],
 );
 
+/** One row per member who has agreed to open the Wrapped before its scheduled time. */
+export const wrappedEarlyVotes = pgTable(
+  'wrapped_early_votes',
+  {
+    tripId: text('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: bigint('created_at', { mode: 'number' }).notNull().default(nowMs),
+  },
+  (table) => [uniqueIndex('ux_wrapped_early_votes_trip_user').on(table.tripId, table.userId)],
+);
+
 export const ceremonyState = pgTable(
   'ceremony_state',
   {
@@ -444,6 +459,7 @@ export const schemaTables = {
   predictions,
   achievementUnlocks,
   wrappedViews,
+  wrappedEarlyVotes,
   ceremonyState,
   wrappedSnapshots,
   appliedOps,

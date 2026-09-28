@@ -397,4 +397,64 @@ describe('M9 ceremony and Squad Wrapped', () => {
     await app.close();
     await db.close();
   });
+
+  it('opens the Wrapped early only once every active member agrees', async () => {
+    const { app, bus, db, ownerCookie, tripId, member, outsider } = await fixture(
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
+    );
+    const events: string[] = [];
+    const unsubscribe = bus.subscribe(tripChannel(tripId), ({ type }) => events.push(type));
+    const vote = (cookie: string, agree: boolean) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${tripId}/wrapped/early`,
+        headers: mutationHeaders(cookie),
+        payload: { agree },
+      });
+    const status = async (cookie: string) =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/v1/trips/${tripId}/wrapped/status`,
+          headers: { cookie },
+        })
+      ).json<{ personalUnlocked: boolean; earlyVoteUserIds: string[]; earlyVoteTotal: number }>();
+
+    expect((await vote(outsider.cookie, true)).statusCode).toBe(404);
+
+    const first = await vote(member.cookie, true);
+    expect(first.statusCode, first.body).toBe(200);
+    expect(first.json()).toMatchObject({ released: false, votes: [member.userId], total: 2 });
+    expect(await status(ownerCookie)).toMatchObject({
+      personalUnlocked: false,
+      earlyVoteUserIds: [member.userId],
+      earlyVoteTotal: 2,
+    });
+
+    // Votes are idempotent and can be withdrawn.
+    expect((await vote(member.cookie, true)).json()).toMatchObject({ votes: [member.userId] });
+    expect((await vote(member.cookie, false)).json()).toMatchObject({ votes: [], released: false });
+    await vote(member.cookie, true);
+
+    const last = await vote(ownerCookie, true);
+    expect(last.json()).toMatchObject({ released: true, total: 2 });
+    expect((await status(member.cookie)).personalUnlocked).toBe(true);
+    expect(events).toEqual(
+      expect.arrayContaining(['wrapped.early_vote', 'trip.updated', 'wrapped.unlocked']),
+    );
+
+    const again = await vote(member.cookie, false);
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: { code: 'already_unlocked' } });
+
+    const started = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/ceremony/start`,
+      headers: mutationHeaders(ownerCookie),
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    unsubscribe();
+    await app.close();
+    await db.close();
+  });
 });

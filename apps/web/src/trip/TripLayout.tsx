@@ -11,6 +11,7 @@ import { AvatarStack } from '../components/Avatar.js';
 import { Icon, type UiIconName } from '../components/icons.js';
 import { useOverlays } from '../components/overlayStore.js';
 import { TripSwitcher } from '../screens/home.js';
+import { EditTripSheet } from './EditTrip.js';
 
 export interface TripCtx {
   trip: Trip;
@@ -87,6 +88,8 @@ function useTripEvents(ctx: TripCtx | null) {
     source.addEventListener('phase.changed', onTrip);
     source.addEventListener('ceremony.started', onTrip);
     source.addEventListener('ceremony.step', () => invalidate('ceremony'));
+    source.addEventListener('wrapped.early_vote', () => invalidate('wrapped', 'status'));
+    source.addEventListener('wrapped.unlocked', onTrip);
     return () => source.close();
   }, [tripId, meId, pack]);
 }
@@ -141,8 +144,9 @@ export function TripProvider({ children }: { children: ReactNode }) {
 }
 
 export function TopBar() {
-  const { trip, members } = useTripCtx();
+  const { trip, members, isOwner } = useTripCtx();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   return (
     <>
       <div className="p-top">
@@ -157,7 +161,9 @@ export function TopBar() {
         onClose={() => setOpen(false)}
         currentTripId={trip.id}
         memberCount={members.length}
+        {...(isOwner && trip.ceremonyStartedAt === null ? { onEditTrip: () => setEditing(true) } : {})}
       />
+      {isOwner ? <EditTripSheet open={editing} onClose={() => setEditing(false)} /> : null}
     </>
   );
 }

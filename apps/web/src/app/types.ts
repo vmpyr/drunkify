@@ -181,6 +181,10 @@ export interface WrappedStatus {
   ceremonyStartedAt: number | null;
   serverTime: number;
   watchedUserIds?: string[];
+  /** Members who have agreed to open the Wrapped before its scheduled time. */
+  earlyVoteUserIds?: string[];
+  /** Active members; everyone must agree for an early release. */
+  earlyVoteTotal?: number;
 }
 
 export type WrappedValue = string | number | null;

@@ -36,7 +36,7 @@ function phase(trip: TripRecord, now = Date.now()) {
   return 'live';
 }
 
-function toTrip(trip: TripRecord) {
+export function toTrip(trip: TripRecord) {
   return {
     id: trip.id,
     name: trip.name,

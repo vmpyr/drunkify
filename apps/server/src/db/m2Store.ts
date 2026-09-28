@@ -206,7 +206,15 @@ export interface WrappedStatus {
   ceremonyStarted: boolean;
   ceremonyStartedAt: number | null;
   serverTime: number;
+  /** Active members who have agreed to open the Wrapped early. */
+  earlyVoteUserIds: string[];
+  /** Active (not disabled) members; everyone must agree for an early release. */
+  earlyVoteTotal: number;
 }
+
+export type EarlyReleaseResult =
+  | { released: boolean; trip: TripRecord; votes: string[]; total: number }
+  | { failure: 'not_found' | 'already_unlocked' };
 
 export interface PersonalWrappedResult {
   unlocked: boolean;
@@ -1859,14 +1867,47 @@ export class M2Store {
     return 'ok';
   }
 
-  async listCustomDrinkNames(userId: string, category?: DrinkCategory) {
-    const rows = await this.#adapter.all<Record<string, unknown>>(
-      `select name, abv from custom_drink_names
-       where user_id = ? ${category ? 'and category = ?' : ''}
-       order by last_used_at desc`,
-      category ? [userId, category] : [userId],
-    );
-    return rows.map((row) => ({ name: String(row.name), abv: nullableNumber(row.abv) }));
+  /**
+   * Your own custom drinks first, then (with a trip) the ones your trip-mates added, so a drink one
+   * person typed in is one tap for everyone else. Names are de-duplicated case-insensitively.
+   */
+  async listCustomDrinkNames(userId: string, category?: DrinkCategory, tripId?: string) {
+    const categoryFilter = category ? 'and c.category = ?' : '';
+    const rows = tripId
+      ? await this.#adapter.all<Record<string, unknown>>(
+          `select c.name, c.abv, c.user_id
+           from custom_drink_names c
+           where (c.user_id = ? or c.user_id in (
+               select tm.user_id from trip_members tm
+               where tm.trip_id = ?
+                 and exists (select 1 from trip_members me where me.trip_id = tm.trip_id and me.user_id = ?)
+             )) ${categoryFilter}
+           order by c.last_used_at desc`,
+          category ? [userId, tripId, userId, category] : [userId, tripId, userId],
+        )
+      : await this.#adapter.all<Record<string, unknown>>(
+          `select c.name, c.abv, c.user_id from custom_drink_names c
+           where c.user_id = ? ${categoryFilter}
+           order by c.last_used_at desc`,
+          category ? [userId, category] : [userId],
+        );
+    const ordered = [
+      ...rows.filter((row) => row.user_id === userId),
+      ...rows.filter((row) => row.user_id !== userId),
+    ];
+    const seen = new Set<string>();
+    const names: Array<{ name: string; abv: number | null; shared: boolean }> = [];
+    for (const row of ordered) {
+      const key = String(row.name).trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push({
+        name: String(row.name),
+        abv: nullableNumber(row.abv),
+        shared: row.user_id !== userId,
+      });
+    }
+    return names;
   }
 
   async upsertCustomDrinkName(input: {
@@ -2356,6 +2397,7 @@ export class M2Store {
     if (!row) return null;
     const unlockAt = Number(row.unlock_at);
     const ceremonyStartedAt = nullableNumber(row.ceremony_started_at);
+    const early = await this.#earlyVotes(this.#adapter, tripId);
     return {
       personalUnlockAt: unlockAt,
       personalUnlocked: now >= unlockAt,
@@ -2364,7 +2406,82 @@ export class M2Store {
       ceremonyStarted: ceremonyStartedAt !== null,
       ceremonyStartedAt,
       serverTime: now,
+      earlyVoteUserIds: early.votes,
+      earlyVoteTotal: early.total,
     };
+  }
+
+  async #earlyVotes(
+    tx: SqlExecutor,
+    tripId: string,
+  ): Promise<{ votes: string[]; total: number }> {
+    const members = await tx.all<Record<string, unknown>>(
+      `select u.id as user_id, v.user_id as voted
+       from trip_members tm
+       join users u on u.id = tm.user_id
+       left join wrapped_early_votes v on v.trip_id = tm.trip_id and v.user_id = tm.user_id
+       where tm.trip_id = ? and u.disabled_at is null
+       order by tm.joined_at asc`,
+      [tripId],
+    );
+    return {
+      votes: members.filter((row) => row.voted !== null).map((row) => String(row.user_id)),
+      total: members.length,
+    };
+  }
+
+  /**
+   * Records (or withdraws) one member's agreement to open the Wrapped now. When every active member
+   * has agreed, the unlock time moves to now; the phase scheduler takes it from there.
+   */
+  async voteEarlyRelease(
+    tripId: string,
+    userId: string,
+    agree: boolean,
+    now: number,
+  ): Promise<EarlyReleaseResult> {
+    return this.#adapter.transaction(async (tx) => {
+      const current = await tx.get<Record<string, unknown>>(
+        `select t.unlock_at, t.ceremony_started_at
+         from trips t
+         join trip_members tm on tm.trip_id = t.id and tm.user_id = ?
+         where t.id = ? ${this.#forUpdate}`,
+        [userId, tripId],
+      );
+      if (!current) return { failure: 'not_found' as const };
+      if (current.ceremony_started_at !== null || now >= Number(current.unlock_at)) {
+        return { failure: 'already_unlocked' as const };
+      }
+      if (agree) {
+        await tx.run(
+          `insert into wrapped_early_votes (trip_id, user_id, created_at)
+           values (?, ?, ?)
+           on conflict (trip_id, user_id) do nothing`,
+          [tripId, userId, now],
+        );
+      } else {
+        await tx.run('delete from wrapped_early_votes where trip_id = ? and user_id = ?', [
+          tripId,
+          userId,
+        ]);
+      }
+      const early = await this.#earlyVotes(tx, tripId);
+      const released = early.total > 0 && early.votes.length >= early.total;
+      if (released) {
+        await tx.run(
+          `update trips
+           set unlock_at = ?, final24h_marked_at = null, wrapped_unlocked_marked_at = null,
+               data_revision = data_revision + 1, updated_at = ?
+           where id = ?`,
+          [now, now, tripId],
+        );
+      }
+      const trip = normalizeTrip(
+        await tx.get<Record<string, unknown>>('select * from trips where id = ?', [tripId]),
+      );
+      if (!trip) throw new Error('Trip disappeared');
+      return { released, trip, votes: early.votes, total: early.total };
+    });
   }
 
   async getPersonalWrapped(

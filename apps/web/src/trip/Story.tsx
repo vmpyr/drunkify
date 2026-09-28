@@ -54,6 +54,11 @@ function splitAbsurd(phrase: string, value: WrappedValue): { big: string; rest: 
 
 type Vars = Record<string, string | number>;
 
+/** Theme copy is written for plurals: "1 achievements" → "1 achievement", "1 times" → "1 time". */
+function countFix(text: string): string {
+  return text.replace(/\b1 (\w+?)s\b/g, '1 $1').replace(/,\s*0 [\p{L}]+\.$/u, '.');
+}
+
 function clean(vars: Record<string, WrappedValue>): Vars {
   const out: Vars = {};
   for (const [key, value] of Object.entries(vars)) out[key] = value ?? '';
@@ -106,7 +111,7 @@ export function PersonalWrapped() {
   const variant = card.key.startsWith(`${id}.`) ? card.key.slice(id.length + 1) : null;
   const vars = clean(card.vars);
   const c = (field: string, extra: Vars = {}) =>
-    tpMaybe(pack, `wrappedPersonal.cards.${id}.${field}`, { ...vars, ...extra }) ?? '';
+    countFix(tpMaybe(pack, `wrappedPersonal.cards.${id}.${field}`, { ...vars, ...extra }) ?? '');
   const amber = id === '02_absurd_units' || id === '13_rank';
   const interactive = id === '03_guess_ethanol' && !guessLocked;
 

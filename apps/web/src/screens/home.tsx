@@ -19,11 +19,14 @@ export function TripSwitcher({
   onClose,
   currentTripId,
   memberCount,
+  onEditTrip,
 }: {
   open: boolean;
   onClose: () => void;
   currentTripId?: string;
   memberCount?: number;
+  /** Shown to the current trip's owner: opens the trip settings. */
+  onEditTrip?: () => void;
 }) {
   const navigate = useNavigate();
   const me = useMe();
@@ -35,6 +38,26 @@ export function TripSwitcher({
   return (
     <BottomSheet open={open} onClose={onClose} label="Your trips">
       <SheetHead title="Your trips" onClose={onClose} />
+      {onEditTrip ? (
+        <>
+          <button
+            type="button"
+            className="srow"
+            onClick={() => {
+              onClose();
+              onEditTrip();
+            }}
+          >
+            <Icon name="note" />
+            <div className="v">
+              <b>Edit trip</b>
+              <span>Name, theme and when the Wrapped opens</span>
+            </div>
+            <Icon name="down" className="fwd" />
+          </button>
+          <div className="sgap" />
+        </>
+      ) : null}
       {(trips.data ?? []).map((trip) => (
         <button
           type="button"

@@ -462,10 +462,16 @@ export function registerM4Routes(
 
   app.get('/api/v1/me/custom-drink-names', async (request, reply) => {
     if (!requireSession(request, reply)) return;
-    const query = z.object({ category: categorySchema.optional() }).safeParse(request.query);
+    const query = z
+      .object({ category: categorySchema.optional(), tripId: z.string().uuid().optional() })
+      .safeParse(request.query);
     if (!query.success) return sendError(reply, 422, 'validation_failed', 'Validation failed');
     return {
-      names: await service.listCustomDrinkNames(request.auth!.userId, query.data.category),
+      names: await service.listCustomDrinkNames(
+        request.auth!.userId,
+        query.data.category,
+        query.data.tripId,
+      ),
     };
   });
 

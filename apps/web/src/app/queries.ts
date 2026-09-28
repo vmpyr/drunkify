@@ -113,12 +113,13 @@ export function useFavourites() {
   });
 }
 
-export function useCustomNames(category: DrinkCategory) {
+/** Custom drink names: yours first, then ones your trip-mates added (flagged `shared`). */
+export function useCustomNames(category: DrinkCategory, tripId: string) {
   return useQuery({
-    queryKey: ['customNames', category],
+    queryKey: ['customNames', category, tripId],
     queryFn: async () =>
-      (await v1<{ names: Array<{ name: string; abv: number | null }> }>(
-        `/me/custom-drink-names?category=${category}`,
+      (await v1<{ names: Array<{ name: string; abv: number | null; shared?: boolean }> }>(
+        `/me/custom-drink-names?category=${category}&tripId=${tripId}`,
       )).names,
   });
 }

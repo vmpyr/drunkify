@@ -329,4 +329,64 @@ describe('M4 venues and operation ledger', () => {
     await app.close();
     await db.close();
   });
+
+  it('shares custom drink names with trip-mates, yours first, without leaking to outsiders', async () => {
+    const { app, db, cookie, tripId } = await fixture();
+    const invite = async (email: string, withTrip: boolean) => {
+      const issued = await app.inject({
+        method: 'POST',
+        url: '/api/v1/invites',
+        headers: headers(cookie),
+        payload: { name: email.split('@')[0], email, ...(withTrip ? { tripId } : {}) },
+      });
+      const token = issued.json<{ url: string }>().url.split('/').at(-1)!;
+      const accepted = await app.inject({
+        method: 'POST',
+        url: '/api/v1/invites/accept',
+        headers: { 'x-requested-with': 'drunkify' },
+        payload: { token, name: email.split('@')[0], email, password: 'LongUniquePassphrase7' },
+      });
+      return firstHeader(accepted.headers['set-cookie']).split(';')[0]!;
+    };
+    const mate = await invite('mate@example.com', true);
+    const outsider = await invite('outsider@example.com', false);
+    const add = (who: string, name: string, abv: number) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/me/custom-drink-names',
+        headers: headers(who),
+        payload: { category: 'beer', name, abv },
+      });
+    const list = async (who: string) =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/v1/me/custom-drink-names?category=beer&tripId=${tripId}`,
+          headers: { cookie: who },
+        })
+      ).json<{ names: Array<{ name: string; shared: boolean }> }>().names;
+
+    await add(cookie, 'Super Bock', 5.2);
+    await add(mate, 'Sagres Preta', 4.3);
+    await add(mate, 'super bock', 5.2);
+    await add(outsider, 'Secret Stout', 7);
+
+    // The mate's own "super bock" wins over the owner's "Super Bock".
+    const mates = await list(mate);
+    expect(mates).toHaveLength(2);
+    expect(mates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'super bock', shared: false }),
+        expect.objectContaining({ name: 'Sagres Preta', shared: false }),
+      ]),
+    );
+    expect(await list(cookie)).toEqual([
+      expect.objectContaining({ name: 'Super Bock', shared: false }),
+      expect.objectContaining({ name: 'Sagres Preta', shared: true }),
+    ]);
+    // Not a member of the trip: only their own names come back.
+    expect((await list(outsider)).map((entry) => entry.name)).toEqual(['Secret Stout']);
+    await app.close();
+    await db.close();
+  });
 });

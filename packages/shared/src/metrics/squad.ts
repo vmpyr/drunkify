@@ -1071,6 +1071,7 @@ export function buildSquadWrapped(
     '05_crowd_then_divisive',
     {
       drink: crowd?.label ?? divisive?.label ?? '',
+      divDrink: divisive?.label ?? '',
       low: round(extremes?.low ?? 0, 1),
       lowName: extremes?.lowUserId ?? '',
       high: round(extremes?.high ?? 0, 1),
@@ -1118,6 +1119,7 @@ export function buildSquadWrapped(
       userId: bloopers.smallest?.userId ?? '',
       note: bloopers.strangestNote?.note ?? '',
       edits: bloopers.mostEdited?.edits ?? 0,
+      editedDrink: bloopers.mostEdited?.drink.drinkName ?? '',
       time: bloopers.loneWater?.drink.localHour ?? 0,
     },
     { bloopers, archetypes },

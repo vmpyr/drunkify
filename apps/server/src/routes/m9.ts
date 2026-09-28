@@ -2,7 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { eventBus as defaultEventBus, tripChannel, type EventBus } from '../realtime/eventBus.js';
+import { runPhaseTransitionPass } from '../scheduler/phaseScheduler.js';
 import { M2Service, type CeremonyFailure, type DatabaseContext } from '../services/m2Service.js';
+import { toTrip } from './m3.js';
 
 const parametersSchema = z.object({ tripId: z.string().uuid() });
 
@@ -44,6 +46,38 @@ export function registerM9Routes(
     const result = await service.getSquadWrapped(parameters.data.tripId, request.auth!.userId);
     if (!result) return sendError(reply, 404, 'not_found', 'Trip not found');
     return result;
+  });
+
+  /** Any member can agree to open the Wrapped early; it opens once every active member agrees. */
+  app.post('/api/v1/trips/:tripId/wrapped/early', async (request, reply) => {
+    if (!requireSession(request, reply)) return;
+    const parameters = parametersSchema.safeParse(request.params);
+    const body = z.object({ agree: z.boolean() }).safeParse(request.body);
+    if (!parameters.success || !body.success) {
+      return sendError(reply, 422, 'validation_failed', 'Validation failed');
+    }
+    const result = await service.voteEarlyRelease(
+      parameters.data.tripId,
+      request.auth!.userId,
+      body.data.agree,
+      Date.now(),
+    );
+    if ('failure' in result) {
+      if (result.failure === 'already_unlocked') {
+        return sendError(reply, 409, 'already_unlocked', 'The Wrapped is already open');
+      }
+      return sendError(reply, 404, 'not_found', 'Trip not found');
+    }
+    const channel = tripChannel(parameters.data.tripId);
+    bus.publish(channel, {
+      type: 'wrapped.early_vote',
+      payload: { votes: result.votes, total: result.total, released: result.released },
+    });
+    if (result.released) {
+      bus.publish(channel, { type: 'trip.updated', payload: toTrip(result.trip) });
+      await runPhaseTransitionPass(service, bus);
+    }
+    return { released: result.released, votes: result.votes, total: result.total };
   });
 
   app.post('/api/v1/trips/:tripId/ceremony/start', async (request, reply) => {

@@ -43,6 +43,13 @@
       "when": 1790367702486,
       "tag": "0005_jittery_miek",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790410317113,
+      "tag": "0006_wrapped_early_votes",
+      "breakpoints": true
     }
   ]
 }

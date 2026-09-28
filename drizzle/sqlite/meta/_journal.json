@@ -43,6 +43,13 @@
       "when": 1790367698908,
       "tag": "0005_loud_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790410315108,
+      "tag": "0006_wrapped_early_votes",
+      "breakpoints": true
     }
   ]
 }

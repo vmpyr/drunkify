@@ -6,9 +6,11 @@ import { countdown, tp } from '../app/content.js';
 import { queryClient, send, serverNow, useWrappedStatus } from '../app/queries.js';
 import { Icon } from '../components/icons.js';
 import { toast } from '../components/overlayStore.js';
-import { BottomSheet, SheetHead } from '../components/Sheet.js';
+import { AvatarStack } from '../components/Avatar.js';
+import { BottomSheet } from '../components/Sheet.js';
 import { formError } from '../screens/auth.js';
 import { LinkResult } from '../screens/links.js';
+import { dateTime } from './EditTrip.js';
 import { useTripCtx } from './TripLayout.js';
 
 export const watchedKey = (tripId: string, userId: string) => `drunkify.watched.${tripId}.${userId}`;
@@ -21,112 +23,106 @@ export function hasWatched(tripId: string, userId: string): boolean {
   }
 }
 
-function Stack() {
+/** The face-down deck on the Wrapped tab: vector so it stays sharp on any screen density. */
+export function Stack() {
+  const cards: Array<[number, string]> = [
+    [-14, '#3F2B1C'],
+    [-4, '#C9534A'],
+    [8, '#F4A73B'],
+  ];
   return (
-    <div className="stack" aria-hidden="true">
-      {[
-        ['-14deg', '#3F2B1C'],
-        ['-4deg', '#C9534A'],
-        ['8deg', '#F4A73B'],
-      ].map(([rotate, colour]) => (
-        <div key={rotate} style={{ background: colour, transform: `translateX(-50%) rotate(${rotate})` }} />
+    <svg className="stack" viewBox="0 0 300 260" role="presentation" aria-hidden="true">
+      <defs>
+        <filter id="stack-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000" floodOpacity="0.35" />
+        </filter>
+      </defs>
+      {cards.map(([rotate, colour], i) => (
+        <g key={rotate} transform={`rotate(${rotate} 150 250)`} filter="url(#stack-shadow)">
+          <rect x="72" y="28" width="156" height="214" rx="18" fill={colour} />
+          <rect
+            x="82"
+            y="38"
+            width="136"
+            height="194"
+            rx="12"
+            fill="none"
+            stroke={i === 2 ? '#24160C' : '#FFF3DE'}
+            strokeOpacity={i === 2 ? 0.28 : 0.12}
+            strokeWidth="2"
+          />
+          {i === 2 ? (
+            <g fill="none" stroke="#24160C" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="118" y="118" width="64" height="50" rx="4" />
+              <path d="M112 104h76v14h-76z" />
+              <path d="M150 104v64" />
+              <path d="M150 104c-6-14-26-16-26-4 0 6 10 4 26 4zM150 104c6-14 26-16 26-4 0 6-10 4-26 4z" />
+            </g>
+          ) : null}
+        </g>
       ))}
-    </div>
+    </svg>
   );
 }
 
-function dateTime(ms: number): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(ms);
-}
+/** Before the unlock: anyone can vote to open it now; it only opens when the whole squad agrees. */
+function EarlyRelease() {
+  const { trip, me, members, pack } = useTripCtx();
+  const status = useWrappedStatus(trip.id);
+  const [busy, setBusy] = useState(false);
+  const votes = status.data?.earlyVoteUserIds ?? [];
+  const active = members.filter((item) => !item.disabled);
+  const total = status.data?.earlyVoteTotal ?? active.length;
+  const mine = votes.includes(me.id);
+  const voters = active.filter((item) => votes.includes(item.userId));
+  const holdouts = active.filter((item) => !votes.includes(item.userId));
 
-function toLocalInput(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** Owner-only: theme and unlock time stay editable until the ceremony starts (DS §6.11). */
-function OwnerSettings() {
-  const { trip, pack } = useTripCtx();
-  const [sheet, setSheet] = useState<'theme' | 'unlock' | null>(null);
-  const [unlock, setUnlock] = useState(toLocalInput(trip.unlockAt));
-  const opened = serverNow() >= trip.unlockAt;
-
-  const patch = async (body: Record<string, unknown>) => {
+  const vote = async (agree: boolean) => {
+    setBusy(true);
     try {
-      await send('PATCH', `/trips/${trip.id}`, body);
+      const result = await send<{ released: boolean }>('POST', `/trips/${trip.id}/wrapped/early`, { agree });
       await queryClient.invalidateQueries({ queryKey: ['trip', trip.id] });
-      void queryClient.invalidateQueries({ queryKey: ['trips'] });
-      setSheet(null);
+      if (result?.released) toast(tp(pack, 'wrappedPersonal.ready.title'));
     } catch (error) {
       toast(formError(error));
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <>
-      <div className="details" style={{ marginTop: 18 }}>
-        <div className="drow">
-          <div className="v">
-            <b>{tp(pack, 'owner.themeLabel')}</b>
-            <span>{pack.name}</span>
-          </div>
-          <button type="button" className="mini" onClick={() => setSheet('theme')}>
-            {tp(pack, 'owner.change')}
-          </button>
+    <div className="blk early">
+      <h4>Can’t wait?</h4>
+      <p>
+        {total <= 1
+          ? 'Open it now.'
+          : `It opens early only if all ${total} of you agree. ${votes.length} of ${total} in so far.`}
+      </p>
+      {total > 1 ? (
+        <div className="early-bar" aria-hidden="true">
+          {active.map((item) => (
+            <i key={item.userId} className={votes.includes(item.userId) ? 'on' : ''} />
+          ))}
         </div>
-        <div className="drow">
-          <div className="v">
-            <b>{opened ? 'Wrapped opened' : tp(pack, 'owner.unlockLabel')}</b>
-            <span>{dateTime(trip.unlockAt)}</span>
-          </div>
-          <button type="button" className="mini" onClick={() => setSheet('unlock')}>
-            {tp(pack, 'owner.change')}
-          </button>
+      ) : null}
+      {voters.length > 0 ? (
+        <div className="early-who">
+          <AvatarStack members={voters} max={10} label={`Agreed: ${voters.map((item) => item.name).join(', ')}`} />
+          {holdouts.length > 0 && holdouts.length <= 3 ? (
+            <span>Waiting on {holdouts.map((item) => (item.userId === me.id ? 'you' : item.name)).join(', ')}</span>
+          ) : null}
         </div>
-      </div>
-      <BottomSheet open={sheet === 'theme'} onClose={() => setSheet(null)} label={tp(pack, 'owner.themeLabel')}>
-        <SheetHead title={tp(pack, 'owner.themeLabel')} onClose={() => setSheet(null)} />
-        {[
-          ['classic', 'Classic'],
-          ['cs2', 'CS2'],
-        ].map(([id, name]) => (
-          <button type="button" key={id} className="srow" onClick={() => void patch({ themeId: id })}>
-            <div className="v">
-              <b>{name}</b>
-            </div>
-            {trip.themeId === id ? <Icon name="check" className="chk" /> : null}
-          </button>
-        ))}
-      </BottomSheet>
-      <BottomSheet open={sheet === 'unlock'} onClose={() => setSheet(null)} label={tp(pack, 'owner.unlockLabel')}>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const ms = new Date(unlock).getTime();
-            if (!Number.isNaN(ms)) void patch({ unlockAt: ms });
-          }}
-        >
-          <SheetHead title={tp(pack, 'owner.unlockLabel')} onClose={() => setSheet(null)} />
-          <input
-            className="inp"
-            type="datetime-local"
-            value={unlock}
-            aria-label={tp(pack, 'owner.unlockLabel')}
-            onChange={(event) => setUnlock(event.target.value)}
-          />
-          <button type="submit" className="pbtn">
-            Save
-          </button>
-        </form>
-      </BottomSheet>
-    </>
+      ) : null}
+      <button
+        type="button"
+        className={`btn full ${mine ? 'sec' : ''}`}
+        disabled={busy || status.isPending}
+        aria-pressed={mine}
+        onClick={() => void vote(!mine)}
+      >
+        {mine ? 'Take my vote back' : votes.length === total - 1 ? 'I’m in. Open it' : 'I’m in, open it early'}
+      </button>
+    </div>
   );
 }
 
@@ -190,7 +186,10 @@ export function WrappedTab() {
             <h4>{trip.unlockAt - now < 86_400_000 ? countdown(trip.unlockAt - now) : dateTime(trip.unlockAt)}</h4>
             <p>{tp(pack, 'home.countdown')}</p>
           </div>
-          {isOwner ? <OwnerSettings /> : null}
+          <EarlyRelease />
+          {isOwner ? (
+            <p className="pmuted early-hint">Tap the trip name up top to change the theme or when it opens.</p>
+          ) : null}
         </>
       ) : started ? (
         <>
@@ -229,7 +228,6 @@ export function WrappedTab() {
           <button type="button" className="tbtn" onClick={() => navigate(`/t/${trip.id}/wrapped/personal`)}>
             {pack.wrappedSquad.rewatch}
           </button>
-          <OwnerSettings />
         </>
       ) : (
         <>
