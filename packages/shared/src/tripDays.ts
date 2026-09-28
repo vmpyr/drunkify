@@ -67,6 +67,28 @@ function epochDay(date: CalendarDate): number {
   return Math.floor(Date.UTC(date.year, date.month - 1, date.day) / 86_400_000);
 }
 
+function timezoneOffsetMs(instantMs: number, timezone: string): number {
+  const local = localDateTime(instantMs, timezone);
+  const localAsUtc = Date.UTC(
+    local.year,
+    local.month - 1,
+    local.day,
+    local.hour,
+    local.minute,
+    local.second,
+  );
+  return localAsUtc - Math.floor(instantMs / 1000) * 1000;
+}
+
+export function tripStartMs(startDate: string, timezone: string): number {
+  const date = parseDate(startDate);
+  const utcMidnight = Date.UTC(date.year, date.month - 1, date.day);
+  // Two passes: the offset in effect at local midnight can differ from the one
+  // at the naive UTC guess across a DST transition, so re-resolve once.
+  const firstGuess = utcMidnight - timezoneOffsetMs(utcMidnight, timezone);
+  return utcMidnight - timezoneOffsetMs(firstGuess, timezone);
+}
+
 export function tripLengthDays(startDate: string, endDate: string): number {
   return epochDay(parseDate(endDate)) - epochDay(parseDate(startDate)) + 1;
 }

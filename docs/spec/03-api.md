@@ -319,7 +319,7 @@ type FeedItem =
 
 Base `/api/v1/trips/:tripId/predictions`, `trip member`.
 
-Window close (C36): effective close = `MIN(predictions_deadline_at, first_drink_at, trips.ceremony_started_at)` (`02` §5.6) — ceremony start force-closes every still-open window immediately, regardless of each member's individual deadline, so a member who joined right before the ceremony can't retain an open window into it.
+Window close (C36): effective close = `MIN(trip start, first_drink_at, trips.ceremony_started_at)` (`02` §5.6), where trip start = `start_date` 00:00 in the trip's timezone — the window stays open until the trip begins regardless of how long before it the member joined. Ceremony start force-closes every still-open window immediately, so a member who joined right before the ceremony can't retain an open window into it.
 
 | Method & path | Request | Response | Errors | Notes |
 |---|---|---|---|---|

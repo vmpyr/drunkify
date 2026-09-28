@@ -120,7 +120,7 @@ Binding: README §4 (shared contracts). Tables, columns and enum values here are
 | `final24h_marked_at` | integer | bigint | yes | `NULL` | scheduler idempotency marker, claimed via `UPDATE … WHERE final24h_marked_at IS NULL` (`05` §4); re-derived/cleared if owner moves `unlock_at` before ceremony (C26) |
 | `wrapped_unlocked_marked_at` | integer | bigint | yes | `NULL` | same, for unlock transition; cleared if owner moves `unlock_at` later before ceremony (C26, `05` §3) |
 | `data_revision` | integer | integer | no | `0` | incremented per the bump matrix below (C24, C37); a personal snapshot is stale when its `wrapped_snapshots.source_revision < trips.data_revision` |
-| `created_at` | integer | bigint | no | now | anchors D10's predictions deadline |
+| `created_at` | integer | bigint | no | now | trip creation instant |
 | `updated_at` | integer | bigint | no | now | |
 
 **Indexes**: index(`owner_id`).
@@ -152,9 +152,10 @@ All "Yes" rows increment in the same transaction as the underlying write (C25).
 | `color_index` | integer | integer | no | — | **unbounded** join ordinal (0, 1, 2, …) — assigned = current member count at join time, **never reassigned** even if earlier members are later disabled or the trip exceeds 10 members (C45); palette colour = `color_index % 10` into `color.members.palette` (10-colour palette), resolved client-side — not the raw column value |
 | `joined_at` | integer | bigint | no | now | |
 | `first_drink_at` | integer | bigint | yes | `NULL` | **immutable** once set (C35): server receipt time of this member's first successful drink create (any create — including via `/drinks/sync`), independent of `drunk_at`; a later delete/undo of that drink never clears it |
-| `predictions_deadline_at` | integer | bigint | no | `max(trip.created_at, joined_at) + 24h` | immutable, set once at insert (D10 basis). **Effective window close** = `MIN(predictions_deadline_at, first_drink_at, trips.ceremony_started_at)`, computed at query time (`NULL` columns excluded from the `MIN`) — ceremony start force-closes every still-open window even if neither deadline nor first-drink has passed (C36); `packages/shared` exports the derivation fn shared by API and any background jobs. |
 | `missed_banner_dismissed` | integer(bool) | boolean | no | `false` | "Missed" banner on Log home, dismissible after first view |
 | `last_opened_at` | integer | bigint | yes | `NULL` | bumped on every app-shell load with this trip active; drives "last-opened trip" resume (no column needed on `users`) |
+
+**Prediction window close (D10)**: fully derived at query time, never stored — effective close = `MIN(trip start, first_drink_at, trips.ceremony_started_at)` (`NULL` columns excluded from the `MIN`), where *trip start* = `trips.start_date` 00:00 in `trips.timezone` (`tripStartMs` in `packages/shared`). The window stays open until the trip begins no matter how long before it the member joined; ceremony start force-closes every still-open window even if the trip has not begun and no first drink exists (C36). `packages/shared` exports the derivation fn (`computePredictionWindow`) shared by API and any background jobs.
 
 **Indexes**: unique(`trip_id`, `user_id`), index(`user_id`, `last_opened_at`).
 
@@ -454,7 +455,6 @@ erDiagram
         text user_id FK
         integer color_index "unbounded ordinal, palette = %10"
         integer first_drink_at
-        integer predictions_deadline_at
     }
     drinks {
         text id PK "client uuidv7"

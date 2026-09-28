@@ -33,7 +33,7 @@ Design source of truth: `design/` (copied verbatim from the design handoff). Whe
 | D7 | **Offline log queue in V1**: service worker + IndexedDB; client-generated UUIDs; idempotent create. | DS §7 "Session lost" |
 | D8 | **Geo is pluggable & self-host friendly**: city/country via bundled offline GeoNames dataset; venue suggestion via configurable Overpass endpoint (`GEO_VENUE_PROVIDER=overpass|none`); map tiles via configurable MapLibre style URL (`MAP_STYLE_URL`). | — |
 | D9 | **Trip creation**: admin-only, simple form (name, start/end date, timezone, theme, unlock time). Creator = owner. | DS §10 Q13 |
-| D10 | **Predictions window per member**: closes at `min(first_drink_at, max(tripCreatedAt, joinedAt) + 24h, ceremony_started_at)` (C35, C36). | DS §10 Q9 |
+| D10 | **Predictions window per member**: closes at `min(first_drink_at, trip start, ceremony_started_at)` where trip start = `start_date` 00:00 in the trip's timezone — open until the trip begins regardless of how long before it the member joined (C35, C36). | DS §10 Q9 |
 | D11 | **Removed users**: data stays; still in metrics, leaderboards and awards; can't sign in. | DS §10 Q12 |
 | D12 | **Artwork**: one neutral set (bolt badge, text rank badge). | DS §10 Q1 |
 | D13 | Realtime via **SSE**, single-instance in-memory event bus (Postgres LISTEN/NOTIFY = future). | — |

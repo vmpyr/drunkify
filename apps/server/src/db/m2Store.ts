@@ -10,6 +10,7 @@ import {
   litres,
   pendingTransitions,
   stdDrinks,
+  tripStartMs,
 } from '@drunkify/shared';
 import type { PersonalWrappedPayload, SnapshotInput, SquadWrappedPayload } from '@drunkify/shared';
 
@@ -1970,8 +1971,8 @@ export class M2Store {
     now: number,
   ): Promise<PredictionState | null> {
     const row = await this.#adapter.get<Record<string, unknown>>(
-      `select tm.joined_at, tm.first_drink_at, tm.missed_banner_dismissed,
-              t.created_at, t.ceremony_started_at, p.locked_at
+      `select tm.first_drink_at, tm.missed_banner_dismissed,
+              t.start_date, t.timezone, t.ceremony_started_at, p.locked_at
        from trip_members tm
        join trips t on t.id = tm.trip_id
        left join predictions p on p.trip_id = tm.trip_id and p.user_id = tm.user_id
@@ -2000,8 +2001,8 @@ export class M2Store {
       );
       if (!lockedMember) return { failure: 'not_found' as const };
       const row = await tx.get<Record<string, unknown>>(
-        `select tm.joined_at, tm.first_drink_at, tm.missed_banner_dismissed,
-                t.created_at, t.ceremony_started_at, p.locked_at
+        `select tm.first_drink_at, tm.missed_banner_dismissed,
+                t.start_date, t.timezone, t.ceremony_started_at, p.locked_at
          from trip_members tm
          join trips t on t.id = tm.trip_id
          left join predictions p on p.trip_id = tm.trip_id and p.user_id = tm.user_id
@@ -2883,21 +2884,19 @@ export class M2Store {
 }
 
 function predictionStateFromRow(row: Record<string, unknown>, now: number): PredictionState {
-  const joinedAt = Number(row.joined_at);
-  const createdAt = Number(row.created_at);
-  const baseDeadline = Math.max(createdAt, joinedAt) + 24 * 60 * 60 * 1000;
+  const startAtMs = tripStartMs(String(row.start_date), String(row.timezone));
   const firstDrinkAt = nullableNumber(row.first_drink_at);
   const ceremonyStartedAt = nullableNumber(row.ceremony_started_at);
   const deadlineAt = Math.min(
-    baseDeadline,
+    startAtMs,
     firstDrinkAt ?? Number.POSITIVE_INFINITY,
     ceremonyStartedAt ?? Number.POSITIVE_INFINITY,
   );
   const lockedAt = nullableNumber(row.locked_at);
   return {
     state: computePredictionWindow(
-      { joinedAt, firstDrinkAt, predictionsLockedAt: lockedAt },
-      { createdAt, ceremonyStartedAt },
+      { firstDrinkAt, predictionsLockedAt: lockedAt },
+      { startAtMs, ceremonyStartedAt },
       now,
     ),
     deadlineAt,

@@ -77,7 +77,7 @@ Each milestone = one buildable slice, roughly PR-sized to several PRs. Build in 
 - Deps: M5.
 - Docs: `05-domain-logic.md`, DS §6.4, §6.8, §10 Q9.
 - DoD:
-  - Prediction window closes at `min(firstDrinkTime, max(tripCreatedAt, joinedAt) + 24h)` per member — unit-tested with a joiner after trip start and a member who drinks within the window.
+  - Prediction window closes at `min(firstDrinkTime, trip start)` per member — trip start = `start_date` 00:00 in the trip's timezone, so the window stays open until the trip begins no matter how early the member joined — unit-tested with a member joined well over 24h before trip start (still open) and a member who drinks within the window.
   - **First-drink immutability (C35)**: `trip_members.first_drink_at` is set once, at server receipt time of the member's first successfully-created drink, and is never cleared by later deletes. Regression test logs one drink then deletes it, and separately deletes *every* drink the member has logged, asserting in both cases the prediction window stays closed (does not reopen).
   - All 11 achievement keys from `packages/content` (`first_blood`, `five_in_hour`, `pit_stop`, `pub_crawl`, `mile_high`, `cheers`, `after_3am`, `critic`, `century`, `passport`, `regular`) have a predicate function in `packages/shared` with a golden-fixture unit test (input drink sequence → expected unlock/no-unlock).
   - Deleting a drink never revokes an already-announced achievement (regression test: unlock, delete triggering drink, assert unlock persists).

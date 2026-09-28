@@ -1,15 +1,13 @@
-const DAY_MS = 24 * 3600_000;
-
 export type PredictionWindowState = 'open' | 'locked' | 'missed';
 
 export interface PredictionWindowMember {
-  joinedAt: number;
   firstDrinkAt: number | null;
   predictionsLockedAt: number | null;
 }
 
 export interface PredictionWindowTrip {
-  createdAt: number;
+  /** Trip begin instant: `start_date` 00:00 in the trip's timezone, epoch ms (see `tripStartMs`). */
+  startAtMs: number;
   ceremonyStartedAt: number | null;
 }
 
@@ -21,8 +19,7 @@ export function computePredictionWindow(
   if (member.predictionsLockedAt !== null) return 'locked';
   if (trip.ceremonyStartedAt !== null && nowMs >= trip.ceremonyStartedAt) return 'missed';
 
-  const openedAt = Math.max(trip.createdAt, member.joinedAt);
-  const closesAt = Math.min(member.firstDrinkAt ?? Number.POSITIVE_INFINITY, openedAt + DAY_MS);
+  const closesAt = Math.min(member.firstDrinkAt ?? Number.POSITIVE_INFINITY, trip.startAtMs);
   return nowMs < closesAt ? 'open' : 'missed';
 }
 

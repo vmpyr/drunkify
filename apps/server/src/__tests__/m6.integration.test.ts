@@ -50,14 +50,15 @@ async function fixture() {
   const cookie = firstHeader(signIn.headers['set-cookie']).split(';')[0]!;
   const me = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
   const userId = me.json<{ user: { id: string } }>().user.id;
+  const dayMs = 24 * 60 * 60 * 1000;
   const trip = await app.inject({
     method: 'POST',
     url: '/api/v1/trips',
     headers: { cookie, 'x-requested-with': 'drunkify' },
     payload: {
       name: 'M6 Trip',
-      startDate: '2026-09-25',
-      endDate: '2026-09-27',
+      startDate: new Date(Date.now() + 3 * dayMs).toISOString().slice(0, 10),
+      endDate: new Date(Date.now() + 5 * dayMs).toISOString().slice(0, 10),
       timezone: 'Etc/UTC',
       themeId: 'classic',
       unlockAt: Date.now() + 72 * 60 * 60 * 1000,

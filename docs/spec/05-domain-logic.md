@@ -127,20 +127,21 @@ export function computePhase(
 
 export type PredictionWindowState = 'open' | 'locked' | 'missed';
 export function computePredictionWindow(
-  member: { joinedAt: number; firstDrinkAt: number | null; predictionsLockedAt: number | null },
-  trip: { createdAt: number; ceremonyStartedAt: number | null },
+  member: { firstDrinkAt: number | null; predictionsLockedAt: number | null },
+  trip: { startAtMs: number; ceremonyStartedAt: number | null },
   nowMs: number,
 ): PredictionWindowState
-// closeAt = min(member.firstDrinkAt ?? Infinity, max(trip.createdAt, member.joinedAt) + 24*3600_000)
+// startAtMs = tripStartMs(trips.start_date, trips.timezone) — start_date 00:00 trip-local
+// closeAt = min(member.firstDrinkAt ?? Infinity, trip.startAtMs)
 // predictionsLockedAt !== null → 'locked'   (predictions.locked_at, C7 — no separate submitted_at)
 // trip.ceremonyStartedAt !== null && nowMs >= trip.ceremonyStartedAt → 'missed'
-//   (C36 — ceremony start force-closes any window still nominally 'open' by the 24h/first-drink
-//   math below; a late joiner can't retain an open window past ceremony)
+//   (C36 — ceremony start force-closes any window still nominally 'open' by the trip-start/
+//   first-drink math below; a late joiner can't retain an open window past ceremony)
 // nowMs < closeAt → 'open'
 // else → 'missed'
 ```
 
-Prediction window (D10) is **per-member**, independent of `TripPhase`; in the overwhelming majority of trips it resolves within the `live` phase (closes ≤24h after join or first drink), but a member who joins very late (e.g. inside the final 24h, or after `wrapped_unlocked`) can still carry a nominally-open window right up to ceremony start — the `ceremonyStartedAt` check above is what actually bounds it (C36). It is not itself a `TripPhase` value — it's orthogonal state surfaced only on the Log home / Predictions screen.
+Prediction window (D10) is **per-member**, independent of `TripPhase`; it stays open from the member's join until the trip begins (`start_date` 00:00 trip-local) — no matter how far ahead of the trip they joined — or until their first logged drink, whichever comes first. A member who joins after the trip has begun finds the window already closed, and ceremony start force-closes any window still nominally open (C36). It is not itself a `TripPhase` value — it's orthogonal state surfaced only on the Log home / Predictions screen.
 
 **C35 — `first_drink_at`**: `trip_members.first_drink_at` (immutable, server receipt time) is set inside the drink-create transaction *only when currently `NULL`* — `UPDATE trip_members SET first_drink_at = :now WHERE trip_id=:t AND user_id=:u AND first_drink_at IS NULL`, in the same `BEGIN IMMEDIATE` as the drink insert (C25). That update *is* the definition of "first drink" for window-closing purposes — there is no separate row-count check. Deletes (including the undo delete→recreate flow, §5) never clear it, so re-logging after deleting one's first drink does not reopen the window. `computePredictionWindow` reads the column directly.
 
