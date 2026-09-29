@@ -1,7 +1,7 @@
 import { tripLengthDays } from '../tripDays.js';
 import { rankMembers } from '../rank.js';
-import { byCity, byDay, byVenue, memberVisitCount, topDrinks } from './distribution.js';
-import { deriveDrinks, normalizeDrinkName } from './derive.js';
+import { byCity, byDay, byVenue, memberVisitCount } from './distribution.js';
+import { deriveDrinks } from './derive.js';
 import {
   adventurousness,
   classifyArchetype,
@@ -646,6 +646,35 @@ function actualLeastMember(members: readonly MemberMetrics[]): MemberMetrics | n
   );
 }
 
+function actualTopDay(drinks: readonly DerivedDrink[]): number | null {
+  const litresByDay = new Map<number, number>();
+  for (const drink of drinks) {
+    litresByDay.set(drink.tripDay, (litresByDay.get(drink.tripDay) ?? 0) + drink.litres);
+  }
+  return (
+    [...litresByDay.entries()].sort(
+      ([leftDay, leftLitres], [rightDay, rightLitres]) =>
+        rightLitres - leftLitres || leftDay - rightDay,
+    )[0]?.[0] ?? null
+  );
+}
+
+/** Lowest average rating; same eligibility as the `lowest_rating` award. */
+function actualCritic(members: readonly MemberMetrics[]): MemberMetrics | null {
+  const rated = members.filter((member) => member.ratingAvg !== null);
+  const pool = rated.some((member) => member.ratingCount >= 3)
+    ? rated.filter((member) => member.ratingCount >= 3)
+    : rated;
+  return (
+    [...pool].sort(
+      (left, right) =>
+        left.ratingAvg! - right.ratingAvg! ||
+        left.ratingCount - right.ratingCount ||
+        left.userId.localeCompare(right.userId),
+    )[0] ?? null
+  );
+}
+
 export function scorePredictions(
   predictions: readonly Prediction[],
   members: readonly MemberMetrics[],
@@ -655,7 +684,8 @@ export function scorePredictions(
   const groupLitres = members.reduce((sum, member) => sum + member.litres, 0);
   const topMember = actualTopMember(members);
   const leastMember = actualLeastMember(members);
-  const topDrink = topDrinks(allDrinks, 1)[0] ?? null;
+  const topDay = actualTopDay(allDrinks);
+  const critic = actualCritic(members);
   return predictions
     .map((prediction) => {
       const member = members.find((row) => row.userId === prediction.userId);
@@ -671,13 +701,12 @@ export function scorePredictions(
       const q3Err = prediction.topMemberId === topMember?.userId ? 0 : 1;
       const q4Err = prediction.leastMemberId === leastMember?.userId ? 0 : 1;
       const errors = [q1Err, q2Err, q3Err, q4Err];
-      if (topDrink !== null) {
-        errors.push(
-          prediction.topDrinkCategory === topDrink.category &&
-            normalizeDrinkName(prediction.topDrink) === normalizeDrinkName(topDrink.label)
-            ? 0
-            : 1,
-        );
+      // q5/q6 are null on predictions locked before those questions existed; skip, don't penalise.
+      if (topDay !== null && prediction.topDay !== null) {
+        errors.push(prediction.topDay === topDay ? 0 : 1);
+      }
+      if (critic !== null && prediction.criticMemberId !== null) {
+        errors.push(prediction.criticMemberId === critic.userId ? 0 : 1);
       }
       return {
         userId: prediction.userId,

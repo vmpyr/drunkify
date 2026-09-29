@@ -1,10 +1,9 @@
-import type { DrinkCategory } from '@drunkify/content';
 import { predictionDefaults, tripLengthDays } from '@drunkify/shared';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { catalog, memberColour, tp } from '../app/content.js';
-import { send, usePredictionMe, usePredictionStatus, useRecents } from '../app/queries.js';
+import { memberColour, tp } from '../app/content.js';
+import { send, usePredictionMe, usePredictionStatus } from '../app/queries.js';
 import { initial } from '../components/Avatar.js';
 import { Icon } from '../components/icons.js';
 import { toast } from '../components/overlayStore.js';
@@ -42,13 +41,12 @@ function Stepper({
   );
 }
 
-/** Five questions on one screen, all answered with taps (DS §6.9). */
+/** Six questions on one screen, all answered with taps (DS §6.9). */
 export function Predictions() {
   const { trip, pack, members } = useTripCtx();
   const navigate = useNavigate();
   const me = usePredictionMe(trip.id);
   const status = usePredictionStatus(trip.id, me.data?.state === 'locked');
-  const recents = useRecents(trip.id);
   const days = tripLengthDays(trip.startDate, trip.endDate);
   const active = members.filter((member) => !member.disabled);
   const defaults = predictionDefaults(days, active.length);
@@ -56,24 +54,21 @@ export function Predictions() {
   const [group, setGroup] = useState(defaults.q2);
   const [top, setTop] = useState<string | null>(null);
   const [least, setLeast] = useState<string | null>(null);
-  const [drink, setDrink] = useState<{ name: string; category: DrinkCategory } | null>(null);
+  const [day, setDay] = useState<number | null>(null);
+  const [critic, setCritic] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const drinkOptions: Array<{ name: string; category: DrinkCategory }> = [];
-  const seen = new Set<string>();
-  const push = (name: string, category: DrinkCategory) => {
-    if (seen.has(name)) return;
-    seen.add(name);
-    drinkOptions.push({ name, category });
-  };
-  for (const item of recents.data?.items ?? []) push(item.drinkName, item.category);
-  for (const category of catalog.categories) {
-    if (category.id === 'soft' || category.id === 'other') continue;
-    const first = category.drinks[0];
-    if (first) push(first[0], category.id);
-  }
+  const startMs = Date.parse(`${trip.startDate}T00:00:00Z`);
+  const dayOptions = Array.from({ length: days }, (_, index) => ({
+    day: index + 1,
+    label: new Date(startMs + index * 86_400_000).toLocaleDateString(undefined, {
+      weekday: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }),
+  }));
 
-  const complete = top && least && drink;
+  const complete = top && least && day !== null && critic;
 
   const submit = async () => {
     if (!complete) return;
@@ -84,8 +79,8 @@ export function Predictions() {
         groupTotalStd: group,
         topMemberId: top,
         leastMemberId: least,
-        topDrink: drink.name,
-        topDrinkCategory: drink.category,
+        topDay: day,
+        criticMemberId: critic,
       });
       await me.refetch();
     } catch (error) {
@@ -192,19 +187,25 @@ export function Predictions() {
       <div className="pq">
         <div className="ql">{tp(pack, 'predictions.q5')}</div>
         <div className="chips scrolls" role="radiogroup" aria-label={tp(pack, 'predictions.q5')}>
-          {drinkOptions.map((option) => (
+          {dayOptions.map((option) => (
             <button
               type="button"
-              key={option.name}
+              key={option.day}
               role="radio"
-              aria-checked={drink?.name === option.name}
-              className={`chip ${drink?.name === option.name ? 'on' : ''}`}
-              onClick={() => setDrink(option)}
+              aria-checked={day === option.day}
+              className={`chip ${day === option.day ? 'on' : ''}`}
+              onClick={() => setDay(option.day)}
             >
-              {option.name}
+              {option.label}
             </button>
           ))}
         </div>
+      </div>
+      <div className="pq">
+        <div className="ql">
+          {tp(pack, 'predictions.q6')} <span>{nameOf(critic)}</span>
+        </div>
+        {picker(critic, setCritic, tp(pack, 'predictions.q6'))}
       </div>
       <div style={{ flex: 1, minHeight: 22 }} />
       <button

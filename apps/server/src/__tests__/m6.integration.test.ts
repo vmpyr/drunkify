@@ -111,8 +111,8 @@ describe('M6 predictions and achievements', () => {
       groupTotalStd: 10,
       topMemberId: userId,
       leastMemberId: userId,
-      topDrink: 'Lager',
-      topDrinkCategory: 'beer',
+      topDay: 1,
+      criticMemberId: userId,
     };
     const submitted = await app.inject({
       method: 'PUT',

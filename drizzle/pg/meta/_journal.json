@@ -50,6 +50,13 @@
       "when": 1790410317113,
       "tag": "0006_wrapped_early_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790681154579,
+      "tag": "0007_prediction_day_critic",
+      "breakpoints": true
     }
   ]
 }

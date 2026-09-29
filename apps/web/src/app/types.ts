@@ -168,8 +168,9 @@ export interface PredictionAnswers {
   groupTotalStd: number;
   topMemberId: string;
   leastMemberId: string;
-  topDrink: string;
-  topDrinkCategory: DrinkCategory;
+  /** 1-based trip day. */
+  topDay: number;
+  criticMemberId: string;
 }
 
 export interface WrappedStatus {

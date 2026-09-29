@@ -10,6 +10,7 @@ import {
   litres,
   pendingTransitions,
   stdDrinks,
+  tripLengthDays,
   tripStartMs,
 } from '@drunkify/shared';
 import type { PersonalWrappedPayload, SnapshotInput, SquadWrappedPayload } from '@drunkify/shared';
@@ -242,8 +243,8 @@ export interface PredictionAnswers {
   groupTotalStd: number;
   topMemberId: string;
   leastMemberId: string;
-  topDrink: string;
-  topDrinkCategory: DrinkCategory;
+  topDay: number;
+  criticMemberId: string;
 }
 
 export interface PredictionState {
@@ -1991,7 +1992,9 @@ export class M2Store {
     now: number;
   }): Promise<
     | { state: PredictionState }
-    | { failure: 'not_found' | 'already_locked' | 'window_closed' | 'invalid_member' }
+    | {
+        failure: 'not_found' | 'already_locked' | 'window_closed' | 'invalid_member' | 'invalid_day';
+      }
   > {
     return this.#adapter.transaction(async (tx) => {
       const lockedMember = await tx.get(
@@ -2002,7 +2005,7 @@ export class M2Store {
       if (!lockedMember) return { failure: 'not_found' as const };
       const row = await tx.get<Record<string, unknown>>(
         `select tm.first_drink_at, tm.missed_banner_dismissed,
-                t.start_date, t.timezone, t.ceremony_started_at, p.locked_at
+                t.start_date, t.end_date, t.timezone, t.ceremony_started_at, p.locked_at
          from trip_members tm
          join trips t on t.id = tm.trip_id
          left join predictions p on p.trip_id = tm.trip_id and p.user_id = tm.user_id
@@ -2013,21 +2016,32 @@ export class M2Store {
       const state = predictionStateFromRow(row, input.now);
       if (state.state === 'locked') return { failure: 'already_locked' as const };
       if (state.state !== 'open') return { failure: 'window_closed' as const };
+      if (input.answers.topDay > tripLengthDays(String(row.start_date), String(row.end_date))) {
+        return { failure: 'invalid_day' as const };
+      }
       const selectedMembers = await tx.get<{ count: number | string }>(
         `select count(*) as count from trip_members
-         where trip_id = ? and user_id in (?, ?)`,
-        [input.tripId, input.answers.topMemberId, input.answers.leastMemberId],
+         where trip_id = ? and user_id in (?, ?, ?)`,
+        [
+          input.tripId,
+          input.answers.topMemberId,
+          input.answers.leastMemberId,
+          input.answers.criticMemberId,
+        ],
       );
-      const distinctSelected = new Set([input.answers.topMemberId, input.answers.leastMemberId])
-        .size;
+      const distinctSelected = new Set([
+        input.answers.topMemberId,
+        input.answers.leastMemberId,
+        input.answers.criticMemberId,
+      ]).size;
       if (Number(selectedMembers?.count ?? 0) !== distinctSelected) {
         return { failure: 'invalid_member' as const };
       }
       await tx.run(
         `insert into predictions
           (id, trip_id, user_id, q1_my_total_std, q2_group_total_std,
-           q3_top_member_id, q4_least_member_id, q5_top_drink,
-           q5_top_drink_category, locked_at, created_at, updated_at)
+           q3_top_member_id, q4_least_member_id, q5_top_day,
+           q6_critic_member_id, locked_at, created_at, updated_at)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           input.id,
@@ -2037,8 +2051,8 @@ export class M2Store {
           input.answers.groupTotalStd,
           input.answers.topMemberId,
           input.answers.leastMemberId,
-          input.answers.topDrink,
-          input.answers.topDrinkCategory,
+          input.answers.topDay,
+          input.answers.criticMemberId,
           input.now,
           input.now,
           input.now,
@@ -2325,9 +2339,8 @@ export class M2Store {
           groupTotalStd: Number(row.q2_group_total_std),
           topMemberId: String(row.q3_top_member_id),
           leastMemberId: String(row.q4_least_member_id),
-          topDrink: String(row.q5_top_drink),
-          topDrinkCategory:
-            row.q5_top_drink_category as SnapshotInput['predictions'][number]['topDrinkCategory'],
+          topDay: nullableNumber(row.q5_top_day),
+          criticMemberId: nullableText(row.q6_critic_member_id),
           lockedAt: Number(row.locked_at),
         })),
         venues: venueRows.map((row) => ({

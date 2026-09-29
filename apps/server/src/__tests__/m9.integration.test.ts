@@ -247,8 +247,8 @@ describe('M9 ceremony and Squad Wrapped', () => {
         groupTotalStd: 2,
         topMemberId: member.userId,
         leastMemberId: member.userId,
-        topDrink: 'Lager',
-        topDrinkCategory: 'beer',
+        topDay: 1,
+        criticMemberId: member.userId,
       },
     });
     expect(prediction.statusCode).toBe(409);

@@ -15,7 +15,7 @@ import type { Config } from '../config.js';
 import * as pgSchema from './schema.pg.js';
 import * as sqliteSchema from './schema.sqlite.js';
 
-export const SCHEMA_VERSION = '6';
+export const SCHEMA_VERSION = '7';
 
 export interface SessionRecord {
   id: string;

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { v7 as uuidv7 } from 'uuid';
 import { z } from 'zod';
 
-import { DRINK_CATEGORIES, M2Service, type DatabaseContext } from '../services/m2Service.js';
+import { M2Service, type DatabaseContext } from '../services/m2Service.js';
 
 const parametersSchema = z.object({ tripId: z.string().uuid() });
 
@@ -41,8 +41,8 @@ export function registerM6Routes(app: FastifyInstance, options: { db: DatabaseCo
         groupTotalStd: z.number().int().nonnegative(),
         topMemberId: z.string().uuid(),
         leastMemberId: z.string().uuid(),
-        topDrink: z.string().trim().min(1).max(120),
-        topDrinkCategory: z.enum(DRINK_CATEGORIES),
+        topDay: z.number().int().positive(),
+        criticMemberId: z.string().uuid(),
       })
       .safeParse(request.body);
     if (!parameters.success || !body.success) {
@@ -61,6 +61,9 @@ export function registerM6Routes(app: FastifyInstance, options: { db: DatabaseCo
       }
       if (result.failure === 'invalid_member') {
         return sendError(reply, 422, 'validation_failed', 'Selected member is not in this trip');
+      }
+      if (result.failure === 'invalid_day') {
+        return sendError(reply, 422, 'validation_failed', 'Selected day is outside this trip');
       }
       return sendError(
         reply,

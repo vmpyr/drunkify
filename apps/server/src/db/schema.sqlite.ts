@@ -291,19 +291,15 @@ export const predictions = sqliteTable(
     q4LeastMemberId: text('q4_least_member_id').references(() => users.id, {
       onDelete: 'set null',
     }),
-    q5TopDrink: text('q5_top_drink'),
-    q5TopDrinkCategory: text('q5_top_drink_category'),
+    q5TopDay: integer('q5_top_day'),
+    q6CriticMemberId: text('q6_critic_member_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     lockedAt: integer('locked_at'),
     createdAt: integer('created_at').notNull().default(nowMs),
     updatedAt: integer('updated_at').notNull().default(nowMs),
   },
-  (table) => [
-    uniqueIndex('ux_predictions_trip_user').on(table.tripId, table.userId),
-    check(
-      'ck_predictions_q5_top_drink_category',
-      sql`${table.q5TopDrinkCategory} in ('beer','wine','cocktail','spirit','shot','cider','seltzer','soft','other')`,
-    ),
-  ],
+  (table) => [uniqueIndex('ux_predictions_trip_user').on(table.tripId, table.userId)],
 );
 
 export const achievementUnlocks = sqliteTable(

@@ -159,8 +159,8 @@ export function squadFixture(
       groupTotalStd: 180,
       topMemberId: members[0]?.userId ?? row.userId,
       leastMemberId: members.at(-1)?.userId ?? row.userId,
-      topDrink: 'Lager',
-      topDrinkCategory: 'beer',
+      topDay: 1,
+      criticMemberId: members.at(-1)?.userId ?? row.userId,
       lockedAt: Date.parse('2026-09-01T10:00:00.000Z') + index * 60_000,
     })),
     venues: [1, 2, 3].map((index) => ({

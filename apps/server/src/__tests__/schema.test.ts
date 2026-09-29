@@ -29,9 +29,6 @@ describe('database schema parity', () => {
       expect(predictions.indexes.map((item) => item.config.name)).toContain(
         'ux_predictions_trip_user',
       );
-      expect(predictions.checks.map((item) => item.name)).toContain(
-        'ck_predictions_q5_top_drink_category',
-      );
       expect(
         predictions.foreignKeys.map((item) => ({
           column: item.reference().columns[0]?.name,
@@ -43,6 +40,7 @@ describe('database schema parity', () => {
           { column: 'user_id', onDelete: 'cascade' },
           { column: 'q3_top_member_id', onDelete: 'set null' },
           { column: 'q4_least_member_id', onDelete: 'set null' },
+          { column: 'q6_critic_member_id', onDelete: 'set null' },
         ]),
       );
     }

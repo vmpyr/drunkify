@@ -98,8 +98,10 @@ export interface Prediction {
   groupTotalStd: number;
   topMemberId: string;
   leastMemberId: string;
-  topDrink: string;
-  topDrinkCategory: DrinkCategory;
+  /** 1-based trip day; null on predictions locked before q5 existed. */
+  topDay: number | null;
+  /** Null on predictions locked before q6 existed. */
+  criticMemberId: string | null;
   lockedAt: number;
 }
 
